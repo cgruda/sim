@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdint.h>
 #include "dbg.h"
 
 #define CORE_CNT	4
@@ -35,7 +36,7 @@ enum files {
 	FP_MAX
 };
 
-const char *default_sim_files_pathes[FP_MAX] = {
+const char *default_sim_files_paths[FP_MAX] = {
 	[FP_IMEME0]     = "imem0.txt",
 	[FP_IMEME1]     = "imem1.txt",
 	[FP_IMEME2]     = "imem2.txt",
@@ -66,37 +67,33 @@ const char *default_sim_files_pathes[FP_MAX] = {
 };
 
 struct sim_env {
-	FILE *fp[FP_MAX];
+	char **sim_files_paths;
 };
 
-void sim_init(struct sim_env *p_env, int argc, char **argv)
+int sim_init(struct sim_env *p_env, int argc, char **argv)
 {
-	char **sim_files_paths = NULL;
-
 	if (!argc) {
-		sim_files_paths = &default_sim_files_pathes;
+		p_env->sim_files_paths = &default_sim_files_paths;
 	} else if (argc == ARGC_CNT) {
-		sim_files_paths = argv;
+		p_env->sim_files_paths = argv;
 	} else {
-		dbg_error("invalid input (received %d args, expected %d)\n", argc, ARGC_CNT);
+		dbg_error("invalid input (received %d arguments, expected %d)\n", argc, ARGC_CNT);
 		return -1;
 	}
 
-	for (int i = 0; i < FP_MAX; i++) {
-		char *mode = (i < FP_MEMOUT) ? "r" : "w";
-		p_env->fp[i] = fopen(sim_files_paths, mode);
-		if (!p_env->fp[i]) {
-			print_error();
-			return -1; // FIXME: need to close files that did open
-		}
-	}
+	dbg_trace();
 }
+
+
 
 int main(int argc, char **argv)
 {
 	struct sim_env env = {0};
+	int res;
 
-	sim_init(&env, --argc, ++argv);
+	res = sim_init(&env, --argc, ++argv);
+	if (res < 0)
+		return -1;
 
 	dbg_verbose("hello sim!\n");
 

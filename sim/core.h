@@ -3,8 +3,10 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "cache.h"
 
 #define REG_MAX 16
+#define IMEM_LEN 1024
 
 enum opcode {
 	OP_ADD,
@@ -44,8 +46,14 @@ struct inst {
 
 struct core {
 	uint32_t pc : 10;
+	int fetch;
+	int decode;
+	int exec;
+	int mem;
+
 	uint32_t regs[REG_MAX];
 	struct cache cache;
+	uint32_t *imem;
 };
 
 #endif

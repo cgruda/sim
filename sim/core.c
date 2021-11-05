@@ -10,44 +10,44 @@
 void add(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
 {
 	R[rd] = R[rs] + R[rt];
-	*pc++;
+	(*pc)++;
 }
 
 void sub(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
 {
 	R[rd] = R[rs] - R[rt];
-	*pc++;
+	(*pc)++;
 }
 
 void and(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
 {
 	R[rd] = R[rs] & R[rt];
-	*pc++;
+	(*pc)++;
 }
 
 void or(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
 {
 	R[rd] = R[rs] | R[rt];
-	*pc++;
+	(*pc)++;
 }
 
 void xor(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
 {
 	R[rd] = R[rs] ^ R[rt];
-	*pc++;
+	(*pc)++;
 }
 
 
 void mul(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
 {
 	R[rd] = R[rs] * R[rt];
-	*pc++;
+	(*pc)++;
 }
 
 void sll(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
 {
 	R[rd] = R[rs] << R[rt];
-	*pc++;
+	(*pc)++;
 }
 
 void sra(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
@@ -58,13 +58,13 @@ void sra(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs,
 		sign_extention_mask = ~(BIT(31 - R[rt]) - 1);
 
 	R[rd] = (R[rs] >> R[rt]) | sign_extention_mask;
-	*pc++;
+	(*pc)++;
 }
 
 void srl(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
 {
 	R[rd] = R[rs] >> R[rt];
-	*pc++;
+	(*pc)++;
 }
 
 void beq(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
@@ -72,7 +72,7 @@ void beq(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs,
 	if (R[rs] == R[rt])
 		*pc = R[rd];
 	else
-		*pc++;
+		(*pc)++;
 }
 
 void bne(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
@@ -80,7 +80,7 @@ void bne(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs,
 	if (R[rs] != R[rt])
 		*pc = R[rd];
 	else
-		*pc++;
+		(*pc)++;
 }
 
 void blt(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
@@ -99,7 +99,7 @@ void blt(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs,
 	if (branch)
 		*pc = R[rd];
 	else
-		*pc++;
+		(*pc)++;
 }
 
 void bgt(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
@@ -118,7 +118,7 @@ void bgt(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs,
 	if (branch)
 		*pc = R[rd];
 	else
-		*pc++;
+		(*pc)++;
 }
 
 void ble(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
@@ -137,7 +137,7 @@ void ble(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs,
 	if (branch)
 		*pc = R[rd];
 	else
-		*pc++;
+		(*pc)++;
 }
 
 void bge(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
@@ -156,7 +156,7 @@ void bge(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs,
 	if (branch)
 		*pc = R[rd];
 	else
-		*pc++;
+		(*pc)++;
 }
 
 void jal(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
@@ -168,13 +168,13 @@ void jal(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs,
 void lw(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
 {
 	// R[rd] = MEM[R[rs] + R[rt]]; // FIXME:
-	*pc++;
+	(*pc)++;
 }
 
 void sw(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)
 {
 	// MEM[R[rs] + R[rt]] = R[rd]; // FIXME:
-	*pc++;
+	(*pc)++;
 }
 
 void halt(uint32_t *pc, struct cache *MEM, uint32_t *R, uint32_t rd, uint32_t rs, uint32_t rt)

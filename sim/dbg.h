@@ -1,6 +1,8 @@
 #ifndef _DBG_H_
 #define _DBG_H_
 
+#define _CRT_SECURE_NO_WARNINGS
+
 #include <stdio.h>
 #include <string.h>
 
@@ -41,4 +43,4 @@ const char *dbg_level_stamp[DBG_MAX];
 // #define CLR_BIT(map, pos) ((map) &= ~BIT(pos))
 // #define TEST_BIT(map, pos) (!!((map) & BIT(pos)))
 
-#endif // __TASKS_H__
+#endif
