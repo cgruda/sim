@@ -2,26 +2,26 @@
 #include <stdlib.h>
 #include "mem.h"
 
-int mem_alloc(uint32_t **p_p_mem, int len)
+uint32_t *mem_init(int len)
 {
-	*p_p_mem = calloc(len, sizeof(uint32_t));
-	if (!*p_p_mem) {
+	uint32_t *p_mem = calloc(len, sizeof(uint32_t));
+	if (!p_mem) {
 		dbg_error("failed to allocate memory\n");
 		print_error();
-		return -1;
+		return NULL;
 	}
 
-	return 0;
+	return p_mem;
 }
 
-int mem_free(uint32_t **p_p_mem, int len)
+void mem_free(uint32_t *p_mem)
 {
-	if (p_p_mem && *p_p_mem) {
-		free(*p_p_mem);
-		*p_p_mem  = NULL;
+	if (!p_mem) {
+		dbg_warning("invalid memory\n");
+		return;
 	}
 
-	return 0;
+	free(p_mem);
 }
 
 int mem_load(char *path, uint32_t *mem, int len)
@@ -67,4 +67,14 @@ int mem_dump(char *path, uint32_t *mem, int len)
 
 	fclose(fp);
 	return 0;
+}
+
+void mem_write(uint32_t *mem, uint32_t addr, uint32_t data)
+{
+	mem[addr] = data;
+}
+
+uint32_t mem_read(uint32_t *mem, uint32_t addr)
+{
+	return mem[addr];
 }

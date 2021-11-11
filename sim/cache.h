@@ -42,4 +42,7 @@ struct cache {
 	struct tsram tsram;
 };
 
+struct cache *cache_init();
+void cache_free(struct cache *p_cache);
+
 #endif

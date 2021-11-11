@@ -8,7 +8,9 @@
 #define REG_MAX 16
 #define IMEM_LEN 1024
 
-enum opcode {
+struct cache;
+
+enum op {
 	OP_ADD,
 	OP_SUB,
 	OP_AND,
@@ -28,32 +30,43 @@ enum opcode {
 	OP_LW,
 	OP_SW,
 	OP_HALT,
-	OP_MAX
+	OP_MAX,
 };
 
-struct cache;
+enum pipe_stage {
+	IF_ID,
+	ID_EX,
+	EX_MEM,
+	MEM_WB,
+	PIPE_MAX
+};
 
-struct inst {
-	union {
-		uint32_t op : 8,
-			 rd : 4,
-			 rs : 4,
-			 rt : 4,
-			 im : 12;
-		uint32_t word;
-	};
+typedef struct reg32 {
+	uint32_t d;
+	uint32_t q;
+} reg32_t;
+
+struct pipe {
+	reg32_t npc;
+	reg32_t rsv;
+	reg32_t rtv;
+	reg32_t rdv;
+	reg32_t alu;
+	reg32_t dst;
+	reg32_t imm;
+	reg32_t md;
+	reg32_t ir;
+	reg32_t rw;
 };
 
 struct core {
-	uint32_t pc : 10;
-	int fetch;
-	int decode;
-	int exec;
-	int mem;
-
-	uint32_t regs[REG_MAX];
-	struct cache cache;
+	reg32_t pc;
+	reg32_t reg[REG_MAX];
 	uint32_t *imem;
+	struct cache *cache;
+	struct pipe pipe[PIPE_MAX];
+	bool halt;
+	uint32_t *mem;
 };
 
 #endif
