@@ -6,8 +6,7 @@ struct cache *cache_init()
 {
 	struct cache *p_cache = calloc(1, sizeof(*p_cache));
 	if (!p_cache) {
-		dbg_error("failed to allocate cache\n");
-		print_error();
+		print_error("Failed to allocate cache");
 		return NULL;
 	}
 
@@ -17,19 +16,9 @@ struct cache *cache_init()
 void cache_free(struct cache *p_cache)
 {
 	if (!p_cache) {
-		dbg_warning("invalid cache\n");
+		dbg_warning("Invalid cache\n");
 		return;
 	}
 
 	free(p_cache);
-}
-
-uint32_t cache_read(uint32_t addr)
-{
-
-}
-
-uint32_t cache_write(uint32_t addr)
-{
-
 }

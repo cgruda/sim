@@ -6,8 +6,7 @@ uint32_t *mem_init(int len)
 {
 	uint32_t *p_mem = calloc(len, sizeof(uint32_t));
 	if (!p_mem) {
-		dbg_error("failed to allocate memory\n");
-		print_error();
+		print_error("Failed to allocate memory");
 		return NULL;
 	}
 
@@ -17,7 +16,7 @@ uint32_t *mem_init(int len)
 void mem_free(uint32_t *p_mem)
 {
 	if (!p_mem) {
-		dbg_warning("invalid memory\n");
+		dbg_warning("Invalid memory\n");
 		return;
 	}
 
@@ -30,12 +29,11 @@ int mem_load(char *path, uint32_t *mem, int len)
 	FILE *fp = NULL;
 
 	if (!(fp = fopen(path, "r"))) {
-		dbg_error("failed to open \"%s\"\n", path);
-		print_error();
+		print_error("Failed to open \"%s\"", path);
 		return -1;
 	}
 
-	while(!feof(fp)) {
+	while (!feof(fp)) {
 		if (!fscanf(fp, "%x\n", mem++)) {
 			dbg_error("\"%s\" scan error\n", path);
 			fclose(fp);
@@ -57,8 +55,7 @@ int mem_dump(char *path, uint32_t *mem, int len)
 	FILE *fp = NULL;
 
 	if (!(fp = fopen(path, "w"))) {
-		dbg_error("failed to open \"%s\"\n", path);
-		print_error();
+		print_error("Failed to open \"%s\"", path);
 		return -1;
 	}
 

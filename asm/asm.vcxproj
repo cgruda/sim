@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{49efc06e-3e34-44cb-90f1-7b07b3126add}</ProjectGuid>
-    <RootNamespace>sim</RootNamespace>
+    <ProjectGuid>{644da489-0189-4660-9c2a-51ca9c6233d3}</ProjectGuid>
+    <RootNamespace>asm</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -139,21 +139,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="bus.c" />
-    <ClCompile Include="cache.c" />
-    <ClCompile Include="common.c" />
-    <ClCompile Include="core.c" />
-    <ClCompile Include="dbg.c" />
     <ClCompile Include="main.c" />
-    <ClCompile Include="mem.c" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="bus.h" />
-    <ClInclude Include="cache.h" />
-    <ClInclude Include="common.h" />
-    <ClInclude Include="core.h" />
-    <ClInclude Include="dbg.h" />
-    <ClInclude Include="mem.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -27,15 +27,19 @@ const char *dbg_level_stamp[DBG_MAX];
 			printf("[%s] ", dbg_level_stamp[level]);	\
 			printf(__VA_ARGS__);				\
 		}							\
-	} while(0)
+	} while (0)
 
 #define dbg_error(...)   dbg(DBG_ERROR, __VA_ARGS__)
 #define dbg_warning(...) dbg(DBG_WARNING, __VA_ARGS__)
 #define dbg_info(...)    dbg(DBG_INFO, __VA_ARGS__)
 #define dbg_verbose(...) dbg(DBG_VERBOSE, __VA_ARGS__)
-#define dbg_trace(...)   dbg(DBG_TRACE, "\n")
+#define dbg_trace(...)   dbg(DBG_TRACE, "%s\n", __func__)
 
-#define print_error() dbg_error("%s", strerror(errno));
+#define print_error(...) 				\
+	do {						\
+		dbg_error(__VA_ARGS__);			\
+		printf(". %s\n", strerror(errno));	\
+	} while (0)
 
 // // bit operations
 // #define BIT(pos) (1 << (pos))
