@@ -15,7 +15,7 @@ enum core_id {
 	CORE_1,
 	CORE_2,
 	CORE_3,
-	CORE_MAX
+	CORE_MAX = 1
 };
 
 enum op {
@@ -37,6 +37,8 @@ enum op {
 	OP_JAL,
 	OP_LW,
 	OP_SW,
+	OP_RSV1,
+	OP_RSV2,
 	OP_HALT,
 	OP_MAX,
 };
@@ -77,7 +79,13 @@ struct pipe {
 	reg32_t ir;
 };
 
+struct core_flags {
+	uint32_t halt  : 1,
+		 stall : 1;
+};
+
 struct core {
+	uint32_t flags;
 	int idx;
 	reg32_t pc;
 	reg32_t reg[REG_MAX];
@@ -89,17 +97,16 @@ struct core {
 	char *trace_path;
 	char *stats_path;
 	int stats[STATS_MAX];
+	bool stall;
+	bool done;
 };
-
-inline bool core_is_halt(struct core *p_core)
-{
-	return p_core->halt;
-}
 
 struct core *core_init(int idx);
 int core_load(char **file_paths, struct core *p_core, uint32_t *main_mem);
 void core_free(struct core *p_core);
 void core_cycle(struct core *p_core);
 void core_clock_tick(struct core *p_core);
+bool core_is_done(struct core *p_core);
+int core_dump_reg(char *path, struct core *p_core);
 
 #endif

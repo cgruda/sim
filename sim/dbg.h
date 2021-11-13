@@ -16,13 +16,13 @@ enum dbg_level {
 };
 
 #define dbg_stamp() printf("[%s][%d]", __func__, __LINE__)
-#define DBG_LEVEL	DBG_MAX
+#define DBG_LEVEL	DBG_INFO
 
 const char *dbg_level_stamp[DBG_MAX];
 
 #define dbg(level, ...)							\
 	do {								\
-		if (level < DBG_LEVEL) {				\
+		if (level <= DBG_LEVEL) {				\
 			dbg_stamp();					\
 			printf("[%s] ", dbg_level_stamp[level]);	\
 			printf(__VA_ARGS__);				\

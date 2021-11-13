@@ -47,6 +47,8 @@ enum op {
 	OP_JAL,
 	OP_LW,
 	OP_SW,
+	OP_RSV1,
+	OP_RSV2,
 	OP_HALT,
 	OP_MAX,
 };
@@ -70,6 +72,8 @@ const char *op_name[OP_MAX] = {
 	[OP_JAL] = "jal",
 	[OP_LW] = "lw",
 	[OP_SW] = "sw",
+	[OP_RSV1] = "rsv1",
+	[OP_RSV2] = "rsv2",
 	[OP_HALT] = "halt",
 };
 
@@ -93,23 +97,23 @@ enum reg {
 	REG_MAX
 };
 
-const char *reg_name[REG_MAX] = {
-	[REG_0] = "$0",
-	[REG_1] = "$1",
-	[REG_2] = "$2",
-	[REG_3] = "$3",
-	[REG_4] = "$4",
-	[REG_5] = "$5",
-	[REG_6] = "$6",
-	[REG_7] = "$7",
-	[REG_8] = "$8",
-	[REG_9] = "$9",
-	[REG_10] = "$10",
-	[REG_11] = "$11",
-	[REG_12] = "$12",
-	[REG_13] = "$13",
-	[REG_14] = "$14",
-	[REG_15] = "$15",
+const char *reg_name[REG_MAX][4] = {
+	[REG_0] = {"$0", "$r0", "$zero", 0},
+	[REG_1] = {"$1", "$r1", "$imm", 0},
+	[REG_2] = {"$2", "$r2", 0},
+	[REG_3] = {"$3", "$r3", 0},
+	[REG_4] = {"$4", "$r4", 0},
+	[REG_5] = {"$5", "$r5", 0},
+	[REG_6] = {"$6", "$r6", 0},
+	[REG_7] = {"$7", "$r7", 0},
+	[REG_8] = {"$8", "$r8", 0},
+	[REG_9] = {"$9", "$r9", 0},
+	[REG_10] = {"$10", "$r10", 0},
+	[REG_11] = {"$11", "$r11", 0},
+	[REG_12] = {"$12", "$r12", 0},
+	[REG_13] = {"$13", "$r13", 0},
+	[REG_14] = {"$14", "$r14", 0},
+	[REG_15] = {"$15", "$r15", 0},
 };
 
 void remove_comment(char *line)
@@ -155,7 +159,7 @@ uint16_t op_decode(char *op)
 {
 	strtolow(op);
 
-	for (uint8_t i = 0; i < OP_MAX; ++i)
+	for (int i = 0; i < OP_MAX; ++i)
 		if (!strcmp(op, op_name[i]))
 			return i;
 
@@ -167,9 +171,10 @@ uint16_t reg_decode(char *reg)
 {
 	strtolow(reg);
 
-	for (uint8_t i = 0; i < REG_MAX; ++i)
-		if (!strcmp(reg, reg_name[i]))
-			return i;
+	for (int i = 0; i < REG_MAX; ++i)
+		for (int j = 0; reg_name[i][j]; j++)
+			if (!strcmp(reg, reg_name[i][j]))
+				return i;
 
 	printf("error! rd/rs/rt \"%s\" unrecognized. placing \"$zero\" instead!\n", reg);
 	return 0;

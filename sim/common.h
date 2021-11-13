@@ -33,9 +33,10 @@ enum files {
 };
 
 #define BIT(x)	(1U << (x))
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
 
 extern int g_clk;
-const char *default_sim_files_paths[PATH_MAX];
+const char *default_paths[PATH_MAX];
 
 
 #endif

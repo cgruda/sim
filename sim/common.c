@@ -1,6 +1,6 @@
 #include "common.h"
 
-const char *default_sim_files_paths[PATH_MAX] = {
+const char *default_paths[PATH_MAX] = {
 	[PATH_IMEME0]     = "imem0.txt",
 	[PATH_IMEME1]     = "imem1.txt",
 	[PATH_IMEME2]     = "imem2.txt",

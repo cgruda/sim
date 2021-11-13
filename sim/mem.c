@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include "mem.h"
 
+#define ADDR_MASK 0x000FFFFF
+
 uint32_t *mem_init(int len)
 {
 	uint32_t *p_mem = calloc(len, sizeof(uint32_t));
@@ -68,10 +70,10 @@ int mem_dump(char *path, uint32_t *mem, int len)
 
 void mem_write(uint32_t *mem, uint32_t addr, uint32_t data)
 {
-	mem[addr] = data;
+	mem[addr & ADDR_MASK] = data;
 }
 
 uint32_t mem_read(uint32_t *mem, uint32_t addr)
 {
-	return mem[addr];
+	return mem[addr & ADDR_MASK];
 }
