@@ -106,7 +106,7 @@ void sim_run(struct sim_env *p_env)
 		}
 
 		if (done_bitmap == ALL_CORES_DONE) {
-			dbg_info("all cores are done. g_clk=%d\n", g_clk);
+			dbg_info("All cores are done. g_clk=%d\n", g_clk);
 			break;
 		}
 

@@ -283,7 +283,6 @@ void core_execute_instruction(struct core *p_core)
 		p_core->pipe[IF_ID].npc.d = INVALID_PC;
 		p_core->pipe[IF_ID].npc.q = INVALID_PC;
 		id_ex->npc.d = INVALID_PC;
-		dbg_info("[Core%d] executing halt\n", p_core->idx);
 		break;
 	default:
 		break;
@@ -374,10 +373,6 @@ void core_free(struct core *p_core)
 	
 	if (p_core->imem)
 		mem_free(p_core->imem);
-
-	// TODO: temporary
-	if (p_core->mem)
-		mem_free(p_core->mem);
 }
 
 struct core *core_init(int idx)
@@ -409,14 +404,6 @@ struct core *core_init(int idx)
 		return NULL;
 	}
 
-	// TODO: temporary
-	p_core->mem = mem_init(MEM_LEN);
-	if (!p_core->mem) {
-		dbg_error("Failed to allocate core main mem\n");
-		core_free(p_core);
-		return NULL;
-	}
-
 	p_core->idx = idx;
 
 	return p_core;
@@ -438,7 +425,7 @@ int core_load(char **file_paths, struct core *p_core, uint32_t *main_mem)
 		p_core->pipe[i].npc.d = INVALID_PC;
 	}
 
-	dbg_info("Core %d loaded\n", p_core->idx);
+	dbg_info("Core%d loaded\n", p_core->idx);
 
 	return 0;
 }
@@ -489,16 +476,23 @@ int core_trace(struct core *p_core)
 	return 0;
 }
 
+void core_stats(struct core *p_core)
+{
+	// TODO:
+}
+
 void core_cycle(struct core *p_core)
 {
+	// Core functionality
 	core_fetch_instruction(p_core);
 	core_decode_instruction(p_core);
 	core_execute_instruction(p_core);
 	core_memory_access(p_core);
 	core_write_back(p_core);
+
+	// Core race and stats
 	core_trace(p_core);
-	// TODO: core stats
-	dbg_verbose("----------\n");
+	core_stats(p_core);
 }
 
 void core_clock_tick(struct core *p_core)
@@ -532,7 +526,6 @@ bool core_is_halt(struct core *p_core)
 	return p_core->halt;
 }
 
-// TODO: this is super ugly and confusing
 bool core_is_done(struct core *p_core)
 {
 	if (p_core->done)
@@ -540,13 +533,11 @@ bool core_is_done(struct core *p_core)
 
 	if (core_is_halt(p_core)) {
 		for (int i = 0; i < PIPE_MAX; i++) {
-			if (p_core->pipe[i].npc.q != INVALID_PC) {
-				core_trace_pipe(stdin, p_core);
+			if (p_core->pipe[i].npc.q != INVALID_PC)
 				return false;
-			}
 		}
 
-		dbg_info("Core%d is done\n", p_core->idx);
+		dbg_info("Core%d is done. g_clk=%d\n", p_core->idx, g_clk);
 		p_core->done = true;
 	}
 
