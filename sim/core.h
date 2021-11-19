@@ -101,7 +101,7 @@ struct core {
 	bool done;
 };
 
-struct core *core_init(int idx);
+struct core *core_alloc(int idx);
 int core_load(char **file_paths, struct core *p_core, uint32_t *main_mem);
 void core_free(struct core *p_core);
 void core_cycle(struct core *p_core);

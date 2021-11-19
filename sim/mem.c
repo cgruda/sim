@@ -4,7 +4,7 @@
 
 #define ADDR_MASK 0x000FFFFF
 
-uint32_t *mem_init(int len)
+uint32_t *mem_alloc(int len)
 {
 	uint32_t *p_mem = calloc(len, sizeof(uint32_t));
 	if (!p_mem) {

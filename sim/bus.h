@@ -28,4 +28,6 @@ struct bus {
 	uint32_t bus_shared : 1;
 };
 
+extern struct bus bus;
+
 #endif

@@ -6,6 +6,7 @@
 #include "core.h"
 #include "cache.h"
 #include "mem.h"
+#include "bus.h"
 
 #define IS_NEGATIVE(num2c) ((num2c) & BIT(31))
 #define IS_POSITIVE(num2c) (!IS_NEGATIVE(num2c))
@@ -37,6 +38,7 @@ void core_branch_resolution(struct core *p_core, uint8_t op, uint8_t rtv, uint8_
 	reg32_t *reg = p_core->reg;
 	bool branch = false;
 	
+	// TODO: delay slot??
 	switch (op) {
 	case OP_BEQ:
 		branch = rsv == rtv;
@@ -100,22 +102,22 @@ void core_fetch_instruction(struct core *p_core)
 	uint32_t pc = p_core->pc.q;
 
 	if (p_core->stall) {
-		dbg_verbose("[Core%d][FETCH] STALL\n", p_core->idx);
+		dbg_verbose("[core%d][fetch] Stall\n", p_core->idx);
 		return;
 	}
 
 	if_id->ir.d = imem[pc & PC_MASK];
 	if_id->npc.d = pc;
 
-	dbg_verbose("[Core%d][FETCH] pc=%d (inst=%08x)\n", p_core->idx, pc, if_id->ir.d);
+	dbg_verbose("[core%d][fetch] pc=%d\n", p_core->idx, pc);
 }
 
 bool core_read_after_write_hazard(struct core *p_core, uint32_t id_inst)
 {
+	bool hazard = false;
 	bool hazard_rd = false;
 	bool hazard_rs = false;
 	bool hazard_rt = false;
-	bool hazard = false;
 	struct pipe *p_pipe;
 
 	uint8_t op = INST_OP_GET(id_inst);
@@ -123,13 +125,12 @@ bool core_read_after_write_hazard(struct core *p_core, uint32_t id_inst)
 	uint8_t rs = INST_RS_GET(id_inst);
 	uint8_t rt = INST_RT_GET(id_inst);
 
-	// TODO: since you wait for WB you actually have an extera cycle.
-	// this seems to be correct for now, based on trace files given in
-	// the site. needs to be tested though.
+	if (op == OP_HALT)
+		return false;
+
 	for (int i = ID_EX; i < PIPE_MAX; i++) {
 		p_pipe = &p_core->pipe[i];
-		
-		// dst 0 means there is for sure no hazard
+
 		if (!p_pipe->dst.q)
 			continue;
 
@@ -137,21 +138,14 @@ bool core_read_after_write_hazard(struct core *p_core, uint32_t id_inst)
 		hazard_rs = rs && (rs == p_pipe->dst.q);
 		hazard_rt = rt && (rt == p_pipe->dst.q);
 
-		if (op == OP_HALT) {
-			break;
-		} else if (op == OP_JAL) {
-			hazard = hazard_rd;
-		} else {
-			hazard = hazard_rs || hazard_rt;
-			if (op >= OP_BEQ && op <= OP_BGE || op == OP_SW)
-				hazard |= hazard_rd;
-		}
+		if (op != OP_JAL)
+			hazard |= hazard_rs || hazard_rt;
 
-		if (hazard) {
-			dbg_verbose("[Core%d][DEC] RAW Hazard: inst=%08x (pc=%d). [D%d;S%d;T%d][pipe%d;dst=%x]\n", p_core->idx, id_inst, p_core->pipe[IF_ID].npc.q, hazard_rd,
-				hazard_rs, hazard_rt, i, p_pipe->dst.q);
+		if ((op >= OP_BEQ && op <= OP_BGE) || op == OP_JAL || op == OP_SW)
+			hazard |= hazard_rd;
+
+		if (hazard)
 			break;
-		}
 	}
 
 	return hazard;
@@ -174,14 +168,13 @@ void core_unstall(struct core *p_core)
 
 void core_decode_instruction(struct core *p_core)
 {
-	uint32_t sign_extention_mask = 0;
-	uint32_t sign_extended_imm = 0;
 	struct pipe *if_id = &p_core->pipe[IF_ID];
 	struct pipe *id_ex = &p_core->pipe[ID_EX];
+	uint32_t sign_extention_mask = 0;
+	uint32_t sign_extended_imm = 0;
 	reg32_t *reg = p_core->reg;
-
-	// decode instruction
 	uint32_t inst = if_id->ir.q;
+
 	uint8_t op = INST_OP_GET(inst);
 	uint8_t rd = INST_RD_GET(inst);
 	uint8_t rs = INST_RS_GET(inst);
@@ -190,12 +183,16 @@ void core_decode_instruction(struct core *p_core)
 
 	if (if_id->npc.q == INVALID_PC) {
 		id_ex->npc.d = if_id->npc.q;
+
 		if (!p_core->halt)
 			p_core->pc.d = p_core->pc.q + 1;
+
+		dbg_verbose("[core%d][decode] Invalid pc\n", p_core->idx);
 		return;
 	}
 
 	if (core_read_after_write_hazard(p_core, inst)) {
+		dbg_verbose("[core%d][descode] RAW Hazard! pc=%d, inst=%08x\n", p_core->idx, if_id->npc.q, inst);
 		core_stall(p_core);
 		return;
 	} else {
@@ -208,9 +205,8 @@ void core_decode_instruction(struct core *p_core)
 	p_core->reg[1].d = im | sign_extention_mask;
 	p_core->reg[1].q = p_core->reg[1].d;
 
-	dbg_verbose("[Core%d][DEC] inst=%08x (pc=%d), imm=%x\n", p_core->idx, inst, if_id->npc.q, p_core->reg[1].d);
+	dbg_verbose("[core%d][decode] pc=%d, inst=%08x\n", p_core->idx, if_id->npc.q, inst);
 
-	// next pipe stage set
 	id_ex->npc.d = if_id->npc.q;
 	id_ex->rtv.d = reg[rt & REG_MASK].q;
 	id_ex->rsv.d = reg[rs & REG_MASK].q;
@@ -233,6 +229,7 @@ void core_execute_instruction(struct core *p_core)
 	if (id_ex->npc.q == INVALID_PC) {
 		ex_mem->npc.d = id_ex->npc.q;
 		ex_mem->dst.d = id_ex->dst.q;
+		dbg_verbose("[core%d][execute] Invalid pc\n", p_core->idx);
 		return;
 	}
 
@@ -244,39 +241,59 @@ void core_execute_instruction(struct core *p_core)
 	case OP_ADD:
 		alu = rsv + rtv;
 		break;
+
 	case OP_SUB:
 		alu = rsv - rtv;
 		break;
+
 	case OP_AND:
 		alu = rsv & rtv;
 		break;
+
 	case OP_OR:
 		alu = rsv | rtv;
 		break;
+
 	case OP_XOR:
 		alu = rsv ^ rtv;
 		break;
+
 	case OP_MUL:
 		alu = rsv * rtv;
 		break;
+
 	case OP_SLL:
 		alu = rsv << rtv;
 		break;
+
 	case OP_SRA:
 		alu = (rsv >> rtv) | sign_extention_mask;
 		break;
+
 	case OP_SRL:
 		alu = rsv >> rtv;
 		break;
+
+	case OP_BEQ:
+	case OP_BNE:
+	case OP_BLT:
+	case OP_BGT:
+	case OP_BLE:
+	case OP_BGE:
+		break;
+
 	case OP_JAL:
 		alu = id_ex->alu.q;
 		break;
+
 	case OP_LW:
 		alu = rsv + rtv;
 		break;
+
 	case OP_SW:
 		alu = rsv + rtv;
 		break;
+
 	case OP_HALT:
 		p_core->halt = true;
 		p_core->pc.d = INVALID_PC;
@@ -284,18 +301,19 @@ void core_execute_instruction(struct core *p_core)
 		p_core->pipe[IF_ID].npc.q = INVALID_PC;
 		id_ex->npc.d = INVALID_PC;
 		break;
+
 	default:
+		dbg_warning("Invalid op=%d\n", op);
 		break;
 	}
 
-	dbg_verbose("[Core%d][EXEC] op=%d (pc=%d), alu=%d\n", p_core->idx, op, id_ex->npc.q, alu);
+	dbg_verbose("[core%d][execute] pc=%d, op=%x, alu=%d\n", p_core->idx, id_ex->npc.q, op, alu);
 
-	// next pipe stage set
 	ex_mem->npc.d = id_ex->npc.q;
 	ex_mem->alu.d = alu;
 	ex_mem->npc.d = id_ex->npc.q;
 	ex_mem->rdv.d = id_ex->rdv.q;
-	ex_mem->dst.d = id_ex->dst.q;
+	ex_mem->dst.d = id_ex->dst.q;  
 	ex_mem->ir.d = id_ex->ir.q;
 }
 
@@ -311,6 +329,7 @@ void core_memory_access(struct core *p_core)
 	if (ex_mem->npc.q == INVALID_PC) {
 		mem_wb->npc.d = ex_mem->npc.q;
 		mem_wb->dst.d = ex_mem->dst.q;
+		dbg_verbose("[core%d][memory] Invalid pc\n", p_core->idx);
 		return;
 	}
 
@@ -319,17 +338,18 @@ void core_memory_access(struct core *p_core)
 	case OP_LW:
 		data = mem_read(mem, addr);
 		break;
+
 	case OP_SW:
 		data = ex_mem->rdv.q;
 		mem_write(mem, addr, data);
 		break;
+
 	default:
 		break;
 	}
 
-	dbg_verbose("[Core%d][MEM] op=%d (pc=%d), addr=%08x data=%08x\n", p_core->idx, op, ex_mem->npc.q, addr, data);
+	dbg_verbose("[core%d][memory] pc=%d, op=%d, addr=%08x, data=%08x\n", p_core->idx, ex_mem->npc.q, op, addr, data);
 
-	// next pipe stage set
 	mem_wb->npc.d = ex_mem->npc.q;
 	mem_wb->alu.d = ex_mem->alu.q;
 	mem_wb->dst.d = ex_mem->dst.q;
@@ -345,8 +365,10 @@ void core_write_back(struct core *p_core)
 	uint8_t dst = 0;
 	uint8_t val = 0;
 
-	if (mem_wb->npc.q == INVALID_PC)
+	if (mem_wb->npc.q == INVALID_PC) {
+		dbg_verbose("[core%d][writeback] Invalid pc\n", p_core->idx);
 		return;
+	}
 
 	if (op < OP_BEQ || op == OP_JAL) {
 		dst = mem_wb->dst.q & REG_MASK;
@@ -358,7 +380,7 @@ void core_write_back(struct core *p_core)
 
 	reg[dst].d = val;
 
-	dbg_verbose("[Core%d][WB] op=%d (pc=%d), dst=%d val=%08x\n", p_core->idx, op, mem_wb->npc.q, dst, val);
+	dbg_verbose("[core%d][writeback] pc=%d, op=%d, dst=%d, val=%08x\n", p_core->idx, mem_wb->npc.q, op, dst, val);
 }
 
 void core_free(struct core *p_core)
@@ -375,7 +397,7 @@ void core_free(struct core *p_core)
 		mem_free(p_core->imem);
 }
 
-struct core *core_init(int idx)
+struct core *core_alloc(int idx)
 {
 	struct core *p_core = NULL;
 
@@ -390,14 +412,14 @@ struct core *core_init(int idx)
 		return NULL;
 	}
 
-	p_core->cache = cache_init();
+	p_core->cache = cache_alloc();
 	if (!p_core->cache) {
 		dbg_error("Failed to allocate core cache\n");
 		core_free(p_core);
 		return NULL;
 	}
 
-	p_core->imem = mem_init(IMEM_LEN);
+	p_core->imem = mem_alloc(IMEM_LEN);
 	if (!p_core->imem) {
 		dbg_error("Failed to allocate core imem\n");
 		core_free(p_core);
@@ -415,6 +437,7 @@ int core_load(char **file_paths, struct core *p_core, uint32_t *main_mem)
 
 	p_core->trace_path = file_paths[PATH_CORE0TRACE + p_core->idx];
 	p_core->mem = main_mem; // FIXME: temp
+	p_core->cache->p_bus = &bus;
 
 	res = mem_load(file_paths[PATH_IMEME0 + p_core->idx], p_core->imem, IMEM_LEN);
 	if (res < 0)
@@ -425,7 +448,7 @@ int core_load(char **file_paths, struct core *p_core, uint32_t *main_mem)
 		p_core->pipe[i].npc.d = INVALID_PC;
 	}
 
-	dbg_info("Core%d loaded\n", p_core->idx);
+	dbg_info("core%d loaded\n", p_core->idx);
 
 	return 0;
 }
@@ -435,6 +458,7 @@ void core_trace_pipe(FILE *fp, struct core *p_core)
 	uint32_t pc;
 
 	pc = p_core->pipe[IF_ID].npc.d;
+
 	if (pc != INVALID_PC)
 		fprintf(fp, "%03d ", pc);
 	else
@@ -443,6 +467,7 @@ void core_trace_pipe(FILE *fp, struct core *p_core)
 
 	for (int i = ID_EX; i < PIPE_MAX + 1; i++) {
 		pc = p_core->pipe[i - 1].npc.q;
+
 		if (pc != INVALID_PC)
 			fprintf(fp, "%03d ", pc);
 		else
@@ -483,14 +508,14 @@ void core_stats(struct core *p_core)
 
 void core_cycle(struct core *p_core)
 {
-	// Core functionality
+	// core functionality
 	core_fetch_instruction(p_core);
 	core_decode_instruction(p_core);
 	core_execute_instruction(p_core);
 	core_memory_access(p_core);
 	core_write_back(p_core);
 
-	// Core race and stats
+	// core race and stats
 	core_trace(p_core);
 	core_stats(p_core);
 }
@@ -537,7 +562,7 @@ bool core_is_done(struct core *p_core)
 				return false;
 		}
 
-		dbg_info("Core%d is done. g_clk=%d\n", p_core->idx, g_clk);
+		dbg_info("core%d is done. g_clk=%d\n", p_core->idx, g_clk);
 		p_core->done = true;
 	}
 

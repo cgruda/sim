@@ -5,7 +5,7 @@
 
 #define MEM_LEN (1 << 20)
 
-uint32_t *mem_init(int len);
+uint32_t *mem_alloc(int len);
 void mem_free(uint32_t *p_mem);
 int mem_load(char *path, uint32_t *mem, int len);
 int mem_dump(char *path, uint32_t *mem, int len);

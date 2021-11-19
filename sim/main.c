@@ -51,14 +51,14 @@ int sim_init(struct sim_env *p_env, int argc, char **argv)
 	sim_remove_old_output_files(p_env->paths);
 
 	for (int i = 0; i < CORE_MAX; i++) {
-		p_env->core[i] = core_init(i);
+		p_env->core[i] = core_alloc(i);
 		if (!p_env->core[i]) {
 			sim_cleanup(p_env);
 			return -1;
 		}
 
 		// FIXME: temp
-		p_env->mem[i] = mem_init(MEM_LEN);
+		p_env->mem[i] = mem_alloc(MEM_LEN);
 		if (!p_env->mem[i]) {
 			sim_cleanup(p_env);
 			return -1;

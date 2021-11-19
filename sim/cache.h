@@ -8,11 +8,14 @@
 #define DSRAM_LEN	((BLOCK_CNT) * (BLOCK_LEN))
 
 enum mesi {
-	INVALID,
-	SHARED,
-	EXCLUSIVE,
-	MODIFIED,
+	MESI_INVALID,
+	MESI_SHARED,
+	MESI_EXCLUSIVE,
+	MESI_MODIFIED,
+	MESI_MAX
 };
+
+struct bus;
 
 struct block {
 	uint32_t mem[BLOCK_LEN];
@@ -40,9 +43,10 @@ struct tsram {
 struct cache {
 	struct dsram dsram;
 	struct tsram tsram;
+	struct bus *p_bus;
 };
 
-struct cache *cache_init();
+struct cache *cache_alloc();
 void cache_free(struct cache *p_cache);
 
 #endif
