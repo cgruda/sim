@@ -8,6 +8,7 @@
 #include "cache.h"
 
 #define ARGC_CNT	27
+#define MAX_ITERATIONS  100 // FIXME: for debug
 
 struct sim_env {
 	char **paths;
@@ -66,7 +67,7 @@ int sim_init(struct sim_env *p_env, int argc, char **argv)
 
 	p_env->mem.dump_path = p_env->paths[PATH_MEMOUT];
 	p_env->mem.p_bus = &p_env->bus;
-	res = mem_load(p_env->paths[PATH_MEMIN], p_env->mem.data, MEM_LEN);
+	res = mem_load(p_env->paths[PATH_MEMIN], p_env->mem.data, MEM_LEN, MEM_LOAD_FILE); // FIXME: dummy main mem // MEM_LOAD_DUMMY
 	if (res < 0) {
 		sim_cleanup(p_env);
 		return -1;
@@ -109,10 +110,10 @@ void sim_clock_tick(struct sim_env *p_env)
 void sim_snoop(struct sim_env *p_env)
 {
 	for (int i = 0; i < CORE_MAX; i++) {
-		core_snoop_write_bus(p_env->core[i]);
+		core_snoop1(p_env->core[i]);
 	}
 
-	mem_snoop(&p_env->mem, &p_env->bus);
+	mem_snoop(&p_env->mem);
 }
 
 void sim_core_cycle(struct sim_env *p_env)

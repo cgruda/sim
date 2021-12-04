@@ -10,7 +10,7 @@
 #define ADDR_TAG_OFT	8
 #define ADDR_TAG_MSK	0x000FFF00
 #define ADDR_IDX_OFT	2
-#define ADDR_IDX_MSK	0x00F000FC
+#define ADDR_IDX_MSK	0x000000FC
 #define ADDR_OFT_OFT	0
 #define ADDR_OFT_MSK	0x00000003
 
@@ -68,11 +68,13 @@ bool cache_hit(struct cache *p_cache, uint32_t addr);
 void cache_write(struct cache *p_cache, uint32_t addr, uint32_t data);
 uint32_t cache_read(struct cache *p_cache, uint32_t addr);
 void cache_block_state_set(struct cache *p_cache, uint32_t addr, uint8_t state);
-void cache_state_set(struct cache *p_cache, uint32_t idx, uint8_t state);
-uint8_t cache_state_get(struct cache *p_cache, int idx);
+void cache_state_set(struct cache *p_cache, uint8_t idx, uint8_t state);
+uint8_t cache_state_get(struct cache *p_cache, uint8_t idx);
 bool cache_last_addr_in_block(uint32_t addr);
 int cache_dump(struct cache *p_cache);
-void cache_flush_block(struct cache *p_cache, uint8_t idx);
-
+void cache_flush_block(struct cache *p_cache, uint8_t idx, bool shared);
+void cache_evict_block(struct cache *p_cache, uint8_t idx);
+uint16_t cache_tag_get(struct cache *p_cache, uint8_t idx);
+void cache_tag_set(struct cache *p_cache, uint8_t idx, uint16_t tag);
 
 #endif

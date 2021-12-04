@@ -92,7 +92,7 @@ struct core {
 	bool done;
 
 	char *trace_path;
-	char *stats_path;
+	char *stats_dump_path;
 	char *reg_dump_path;
 };
 
@@ -103,6 +103,6 @@ void core_cycle(struct core *p_core);
 void core_clock_tick(struct core *p_core);
 bool core_is_done(struct core *p_core);
 int core_dump(struct core *p_core);
-void core_snoop_write_bus(struct core *p_core);
+void core_snoop1(struct core *p_core);
 
 #endif

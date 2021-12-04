@@ -4,13 +4,16 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define BUS_QUEUE_LEN	4
+
 enum origid {
 	ORIGID_CORE0,
 	ORIGID_CORE1,
 	ORIGID_CORE2,
 	ORIGID_CORE3,
 	ORIGID_MAIN_MEM,
-	ORIGID_MAX
+	ORIGID_INVALID,
+	ORIGID_MAX = ORIGID_INVALID
 };
 
 enum bus_cmd {
@@ -29,15 +32,16 @@ struct bus {
 	uint32_t shared : 1;
 
 	// control
-	bool rd_busy;
-	uint8_t rd_user;
+	bool busy;
 	uint8_t rd_type;
-	uint8_t queue[4];
+	uint8_t user_queue[BUS_QUEUE_LEN];
 	uint8_t flusher;
 	uint8_t flush_cnt;
 	char *trace_path;
 };
 
+bool bus_user_in_queue(struct bus *p_bus, uint8_t user, uint8_t *p_pos);
+uint8_t bus_user_get(struct bus *p_bus);
 uint8_t bus_cmd_get(struct bus *p_bus);
 void bus_read(struct core *p_core, uint32_t addr);
 void bus_read_x(struct core *p_core, uint32_t addr);
@@ -46,5 +50,8 @@ void bus_init(struct bus *p_bus, char *path);
 void bus_clear(struct bus *p_bus);
 void bus_cmd_set(struct bus *p_bus, uint8_t orig_id, uint8_t cmd,
 	uint32_t addr, uint32_t data);
+bool bus_busy(struct bus *p_bus);
+bool bus_user_queue_empty(struct bus *p_bus);
+void bus_user_queue_push(struct bus *p_bus, uint8_t user);
 
 #endif

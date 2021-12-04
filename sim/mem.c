@@ -3,6 +3,7 @@
 #include "mem.h"
 #include "bus.h"
 #include "cache.h"
+#include "common.h"
 
 uint32_t *mem_alloc(int len)
 {
@@ -25,10 +26,18 @@ void mem_free(uint32_t *p_mem)
 	free(p_mem);
 }
 
-int mem_load(char *path, uint32_t *mem, int len)
+int mem_load(char *path, uint32_t *mem, int len, uint8_t load_mode)
 {
 	uint32_t *mem_start = mem;
 	FILE *fp = NULL;
+
+	if (load_mode == MEM_LOAD_DUMMY) {
+		for (int i = 0; i < len; i++) {
+			mem[i] = i;
+		}
+
+		return 0;
+	}
 
 	if (!(fp = fopen(path, "r"))) {
 		print_error("Failed to open \"%s\"", path);
@@ -93,13 +102,15 @@ void mem_flush_block(struct mem *p_mem, uint32_t addr)
 	uint32_t flush_data = mem_read(p_mem, flush_addr);
 
 	bus_cmd_set(p_bus, ORIGID_MAIN_MEM, BUS_CMD_FLUSH, flush_addr, flush_data);
-	dbg_verbose("[mem] bus flush: addr=%05x, data=%08x\n", flush_addr, flush_data);
+	dbg_verbose("[mem][flush] addr=%05x, data=%08x\n", flush_addr, flush_data);
 	// FIXME:NOTE: i dont set bus_shared!!
 	p_bus->flush_cnt++;
 }
 
-void mem_snoop(struct mem *p_mem, struct bus *p_bus)
+void mem_snoop(struct mem *p_mem)
 {
+	struct bus *p_bus = p_mem->p_bus;
+
 	if (p_bus->flusher == ORIGID_MAIN_MEM) {
 		mem_flush_block(p_mem, p_bus->addr);
 		return;
@@ -108,13 +119,22 @@ void mem_snoop(struct mem *p_mem, struct bus *p_bus)
 	switch(bus_cmd_get(p_bus)) {
 	case BUS_CMD_BUS_RD:
 	case BUS_CMD_BUS_RD_X:
-		dbg_verbose("[mem][snoop] cmd=%x, orig=%x\n", p_bus->cmd, p_bus->origid);
-		p_mem->flush_delay = MEM_DATA_DELAY;
+		dbg_verbose("[mem][snoop] clk=%d, cmd=%x, orig=%x\n", g_clk, p_bus->cmd, p_bus->origid);
+		p_mem->flush_delay = MEM_DATA_DELAY - 2;
 		p_bus->flusher = ORIGID_MAIN_MEM;
 		p_bus->cmd = BUS_CMD_NONE;
 		break;
 
 	case BUS_CMD_FLUSH:
+		if (bus_user_get(p_bus) == p_bus->origid) {
+			// core evicting a modified block
+			dbg_verbose("[mem][snoop][evict] orig=%x, addr=%05x, data=%08x\n", p_bus->origid,
+				p_bus->addr, p_bus->data);
+
+			if (p_bus->flush_cnt == BLOCK_LEN) {
+				bus_clear(p_bus);
+			}
+		}
 		mem_write(p_mem, p_bus->addr, p_bus->data);
 		break;
 

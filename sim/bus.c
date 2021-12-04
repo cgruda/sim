@@ -6,14 +6,78 @@
 #include "mem.h"
 #include "common.h"
 
+bool bus_user_in_queue(struct bus *p_bus, uint8_t user, uint8_t *p_pos)
+{
+	for (int i = 0; i < BUS_QUEUE_LEN; i++) {
+		if (p_bus->user_queue[i] == user) {
+			if (p_pos) {
+				*p_pos = i;
+			}
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+uint8_t bus_user_get(struct bus *p_bus)
+{
+	return p_bus->user_queue[0];
+}
+
+void bus_user_queue_push(struct bus *p_bus, uint8_t user)
+{
+	uint8_t pos;
+
+	if (bus_user_in_queue(p_bus, user, &pos)) {
+		dbg_warning("[bus] user %d already in queue (at pos %d)\n", user, pos);
+		return;
+	}
+
+	for (int i = 0; i < BUS_QUEUE_LEN; i++) {
+		if (p_bus->user_queue[i] == ORIGID_INVALID) {
+			p_bus->user_queue[i] = user;
+			break;
+		}
+	}
+}
+
+void bus_user_queue_pop(struct bus *p_bus)
+{
+	for (int i = 0; i < BUS_QUEUE_LEN - 1; i++) {
+		p_bus->user_queue[i] = p_bus->user_queue[i + 1];
+	}
+
+	p_bus->user_queue[BUS_QUEUE_LEN - 1] = ORIGID_INVALID;
+}
+
+void bus_user_queue_reset(struct bus *p_bus)
+{
+	for (int i = 0; i < BUS_QUEUE_LEN; i++) {
+		p_bus->user_queue[i] = ORIGID_INVALID;
+	}
+}
+
+bool bus_user_queue_empty(struct bus *p_bus)
+{
+	for (int i = 0; i < BUS_QUEUE_LEN; i++) {
+		if (p_bus->user_queue[i] != ORIGID_INVALID) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 uint8_t bus_cmd_get(struct bus *p_bus)
 {
 	return (uint8_t)p_bus->cmd;
 }
 
-bool bus_rd_busy(struct bus *p_bus)
+bool bus_busy(struct bus *p_bus)
 {
-	return p_bus->rd_busy;
+	return p_bus->busy;
 }
 
 bool bus_available(struct bus *p_bus)
@@ -34,38 +98,43 @@ void bus_init(struct bus *p_bus, char *path)
 {
 	bus_cmd_set(p_bus, 0, 0, 0, 0);
 	p_bus->shared = false;
-	p_bus->rd_busy = false;
+	p_bus->busy = false;
 	p_bus->flush_cnt = 0;
 	p_bus->trace_path = path;
-	p_bus->rd_user = ORIGID_MAX;
 	p_bus->flusher = ORIGID_MAX;
 	p_bus->rd_type = BUS_CMD_NONE;
-	// TODO: reset queue
+	bus_user_queue_reset(p_bus);
 }
 
 void bus_read_cmd_set(struct bus *p_bus, uint8_t orig_id, uint32_t addr)
 {
-	if (bus_rd_busy(p_bus))
-		dbg_warning("invalid BusRd! ongoing transaction of user %d\n", p_bus->rd_user);
+	if (bus_busy(p_bus)) {
+		dbg_warning("invalid BusRd! ongoing transaction of user %d\n", bus_user_get(p_bus));
+	}
 
 	bus_cmd_set(p_bus, orig_id, BUS_CMD_BUS_RD, addr, 0);
 	p_bus->shared = false; // FIXME: relevant?
-	p_bus->rd_busy = true;
-	p_bus->rd_user = orig_id;
+	p_bus->busy = true;
 	p_bus->rd_type = BUS_CMD_BUS_RD;
 }
 
+// TODO: move to cache module
 void bus_read(struct core *p_core, uint32_t addr)
 {
 	struct cache *p_cache = p_core->p_cache;
 	struct bus *p_bus = p_cache->p_bus;
 
-	if (!bus_rd_busy(p_bus)) {
+	if (!bus_busy(p_bus)) {
+		if (bus_user_queue_empty(p_bus)) {
+			bus_user_queue_push(p_bus, p_core->idx);
+		}
+
 		bus_read_cmd_set(p_bus, p_core->idx, addr);
-		dbg_verbose("[bus][BusRD] orig=%x addr=%05x, rd_user=%x\n", p_bus->origid, p_bus->addr, p_bus->origid);
-		// BIT_CLR(p_bus->rr_map, p_core->idx); // TODO: RR
+		dbg_verbose("[bus][BusRD] orig=%x addr=%05x\n", p_bus->origid, p_bus->addr);
 	} else {
-		// BIT_SET(p_bus->rr_map, p_core->idx);// TODO: RR
+		if (!bus_user_in_queue(p_bus, p_core->idx, NULL)) {
+			bus_user_queue_push(p_bus, p_core->idx);
+		}
 	}
 }
 
@@ -82,8 +151,9 @@ int bus_trace(struct bus *p_bus)
 {
 	FILE *fp = NULL;
 
-	if (!p_bus->cmd)
+	if (!p_bus->cmd) {
 		return 0;
+	}
 
 	if (!(fp = fopen(p_bus->trace_path, "a"))) {
 		print_error("Failed to open \"%s\"", p_bus->trace_path);
@@ -101,9 +171,9 @@ void bus_clear(struct bus *p_bus)
 {
 	bus_cmd_set(p_bus, 0, 0, 0, 0);
 	p_bus->shared = false;
-	p_bus->rd_busy = false;
+	p_bus->busy = false;
 	p_bus->flush_cnt = 0;
-	p_bus->rd_user = ORIGID_MAX;
 	p_bus->rd_type = BUS_CMD_NONE;
 	p_bus->flusher = ORIGID_MAX;
+	bus_user_queue_pop(p_bus);
 }

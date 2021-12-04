@@ -32,6 +32,17 @@
 #define INST_RT_GET(inst)	(((inst) & (INST_RT_MSK)) >> (INST_RT_OFT))
 #define INST_IM_GET(inst)	(((inst) & (INST_IM_MSK)) >> (INST_IM_OFT))
 
+char *core_stat_name_2_str[STATS_MAX] = {
+	[STATS_CYCLE]        = "cycles",
+	[STATS_INSTRUCTION]  = "instructions",
+	[STATS_READ_HIT]     = "read_hit",
+	[STATS_WRITE_HIT]    = "write_hit",
+	[STATS_READ_MISS]    = "read_miss",
+	[STATS_WRITE_MISS]   = "write_miss",
+	[STATS_DECODE_STALL] = "decode_stall",
+	[STATS_MEM_STALL]    = "mem_stall",
+};
+
 void core_branch_resolution(struct core *p_core, uint8_t op, uint8_t rtv, uint8_t rsv, uint8_t rdv)
 {
 	struct pipe *id_ex = &p_core->pipe[ID_EX];
@@ -96,10 +107,11 @@ void core_branch_resolution(struct core *p_core, uint8_t op, uint8_t rtv, uint8_
 		break;
 	}
 
-	if (branch)
+	if (branch) {
 		p_core->pc.d = rdv & PC_MASK;
-	else
+	} else {
 		p_core->pc.d = p_core->pc.q + 1;
+	}
 }
 
 bool core_hazard_raw(struct core *p_core, uint32_t id_inst)
@@ -115,27 +127,32 @@ bool core_hazard_raw(struct core *p_core, uint32_t id_inst)
 	uint8_t rs = INST_RS_GET(id_inst);
 	uint8_t rt = INST_RT_GET(id_inst);
 
-	if (op == OP_HALT)
+	if (op == OP_HALT) {
 		return false;
+	}
 
 	for (int i = ID_EX; i < PIPE_MAX; i++) {
 		p_pipe = &p_core->pipe[i];
 
-		if (!p_pipe->dst.q)
+		if (!p_pipe->dst.q) {
 			continue;
+		}
 
 		hazard_rd = rd && (rd == p_pipe->dst.q);
 		hazard_rs = rs && (rs == p_pipe->dst.q);
 		hazard_rt = rt && (rt == p_pipe->dst.q);
 
-		if (op != OP_JAL)
+		if (op != OP_JAL) {
 			hazard |= hazard_rs || hazard_rt;
+		}
 
-		if ((op >= OP_BEQ && op <= OP_BGE) || op == OP_JAL || op == OP_SW)
+		if ((op >= OP_BEQ && op <= OP_BGE) || op == OP_JAL || op == OP_SW) {
 			hazard |= hazard_rd;
+		}
 
-		if (hazard)
+		if (hazard) {
 			break;
+		}
 	}
 
 	return hazard;
@@ -164,20 +181,27 @@ void core_stall(struct core *p_core, uint8_t stage)
 void core_write(struct core *p_core, uint32_t addr, uint32_t data, bool *write_done)
 {
 	struct cache *p_cache = p_core->p_cache;
+	uint8_t idx = ADDR_IDX_GET(addr);
 
 	if (cache_hit(p_cache, addr)) {
 		*write_done = true;
 		cache_write(p_cache, addr, data);
 
-		// invalidate other cahces that hold modified block
-		if (cache_state_get(p_cache, ADDR_IDX_GET(addr)) == MESI_SHARED)
+		// invalidate other cahces that hold now modified block
+		if (cache_state_get(p_cache, idx) == MESI_SHARED) {
 			bus_read_x(p_core, addr);
+		}
 
-		uint8_t idx = ADDR_IDX_GET(addr);
 		cache_state_set(p_cache, idx, MESI_MODIFIED);
 	} else {
 		*write_done = false;
-		// TODO: might need to evict!!!
+		
+		if (cache_state_get(p_cache, idx) != MESI_MODIFIED) {
+			cache_evict_block(p_cache, idx);
+			return;
+		}
+
+		// TODO: how this is delayed to next rr
 		bus_read_x(p_core, addr);
 	}
 }
@@ -185,16 +209,21 @@ void core_write(struct core *p_core, uint32_t addr, uint32_t data, bool *write_d
 uint32_t core_read(struct core *p_core, uint32_t addr, bool *read_done)
 {
 	struct cache *p_cache = p_core->p_cache;
+	uint8_t idx = ADDR_IDX_GET(addr);
 	uint32_t data = 0;
 
 	if (cache_hit(p_cache, addr)) {
 		*read_done = true;
 		data = cache_read(p_cache, addr);
-		dbg_verbose("[core%d][PrRD][HIT] read addr=%05x, data=%08x\n", p_core->idx, addr, data);
 	} else {
 		*read_done = false;
-		// TODO: might need to evict!!!
-		dbg_verbose("[core%d][PrRD][MISS] read addr=%05x\n", p_core->idx, addr);
+
+		if (cache_state_get(p_cache, idx) == MESI_MODIFIED) {
+			cache_evict_block(p_cache, idx);
+			return 0;
+		}
+
+		// TODO: how this is delayed to next rr
 		bus_read(p_core, addr);
 	}
 
@@ -248,8 +277,9 @@ void core_decode_instruction(struct core *p_core)
 		return;
 	}
 
-	if (core_hazard_raw(p_core, inst)) {
-		dbg_verbose("[core%d][descode] RAW Hazard! pc=%d, inst=%08x\n", p_core->idx, if_id->npc.q, inst);
+	if (core_hazard_raw(p_core, inst, &hazard_info)) {
+		dbg_verbose("[core%d][descode] RAW Hazard! pc=%d, inst=%08x\n",
+			    p_core->idx, if_id->npc.q, inst);
 		core_stall(p_core, ID_EX);
 		return;
 	} else {
@@ -257,8 +287,10 @@ void core_decode_instruction(struct core *p_core)
 	}
 
 	// sign extend and store imm value in reg1 (D and Q)
-	if (im & BIT(11))
+	if (im & BIT(11)) {
 		sign_extention_mask = ~(BIT(12) - 1);
+	}
+
 	p_core->reg[1].d = im | sign_extention_mask;
 	p_core->reg[1].q = p_core->reg[1].d;
 
@@ -282,6 +314,7 @@ void core_execute_instruction(struct core *p_core)
 	uint32_t rtv = id_ex->rtv.q;
 	uint32_t op = INST_OP_GET(id_ex->ir.q);
 	uint32_t alu = 0;
+	uint32_t sign_extention_mask = 0;
 
 	if (p_core->stall_mem) {
 		dbg_verbose("[core%d][execute] stall\n", p_core->idx);
@@ -295,9 +328,9 @@ void core_execute_instruction(struct core *p_core)
 		return;
 	}
 
-	uint32_t sign_extention_mask = 0;
-	if (IS_NEGATIVE(rsv))
+	if (IS_NEGATIVE(rsv)) {
 		sign_extention_mask = ~(BIT(31 - rtv) - 1);
+	}
 
 	switch (op) {
 	case OP_ADD:
@@ -390,15 +423,13 @@ void core_memory_access(struct core *p_core)
 	bool rw_check = true;
 
 	if (p_core->stall_mem) {
-		if (p_core->p_cache->p_bus->rd_user != p_core->idx) { // bus was cleared
-			if (!cache_hit(p_core->p_cache, addr)) {
-				dbg_error("[core%d][memory] something is wrong\n", p_core->idx);
-				return;
+		if (!bus_user_in_queue(p_core->p_cache->p_bus, p_core->idx, NULL)) { // bus was cleared
+			if (cache_hit(p_core->p_cache, addr)) {
+				p_core->stall_mem = false;
 			}
-			p_core->stall_mem = false;
-			dbg_verbose("[core%d][memory] stall done\n", p_core->idx);
 		} else {
-			dbg_verbose("[core%d][memory] ongoing stall\n", p_core->idx);
+			// TODO: im in queue. what next? when will i get my turn?
+			dbg_verbose("[core%d][memory] stall\n", p_core->idx);
 			return;
 		}
 	}
@@ -410,28 +441,32 @@ void core_memory_access(struct core *p_core)
 		return;
 	}
 
-	switch(op) {
-	case OP_LW:
-		data = core_read(p_core, addr, &rw_done);
-		break;
+	if (op == OP_LW || op == OP_SW) {
+		switch(op) {
+		case OP_LW:
+			data = core_read(p_core, addr, &rw_done);
+			break;
 
-	case OP_SW:
-		data = ex_mem->rdv.q;
-		core_write(p_core, addr, data, &rw_done);
-		break;
+		case OP_SW:
+			data = ex_mem->rdv.q;
+			core_write(p_core, addr, data, &rw_done);
+			break;
 
-	default:
-		rw_check = false;
-		break;
+		default:
+			break;
+		}
+
+		dbg_verbose("[core%d][memory] pc=%d, %c, addr=%08x, data=%08x [%s]\n",
+			    p_core->idx, ex_mem->npc.q, (op == OP_LW) ? 'R' : 'W', addr, data,
+			    rw_done ? "hit" : "miss");
+
+		if (rw_check && !rw_done) {
+			core_stall(p_core, MEM_WB);
+			return;
+		}
+	} else {
+		dbg_verbose("[core%d][memory] pc=%d (no memory access)\n", p_core->idx, ex_mem->npc.q);
 	}
-
-	if (rw_check && !rw_done) {
-		core_stall(p_core, MEM_WB);
-		dbg_verbose("[core%d][memory] mem_stall [pc=%d;op=%x;addr=%08x]\n", p_core->idx, ex_mem->npc.q, op, addr);
-		return;
-	}
-
-	dbg_verbose("[core%d][memory] pc=%d, op=%d, addr=%08x, data=%08x\n", p_core->idx, ex_mem->npc.q, op, addr, data);
 
 	mem_wb->npc.d = ex_mem->npc.q;
 	mem_wb->alu.d = ex_mem->alu.q;
@@ -473,11 +508,13 @@ void core_free(struct core *p_core)
 		return;
 	}
 
-	if (p_core->p_cache)
+	if (p_core->p_cache) {
 		cache_free(p_core->p_cache);
+	}
 	
-	if (p_core->imem)
+	if (p_core->imem) {
 		mem_free(p_core->imem);
+	}
 }
 
 struct core *core_alloc(int idx)
@@ -520,6 +557,7 @@ int core_load(char **file_paths, struct core *p_core, uint32_t *mem, struct bus 
 
 	p_core->trace_path = file_paths[PATH_CORE0TRACE + p_core->idx];
 	p_core->reg_dump_path = file_paths[PATH_REGOUT0 + p_core->idx];
+	p_core->stats_dump_path = file_paths[PATH_STATS0 + p_core->idx];
 
 	// TODO: redo this
 	p_core->p_cache->p_bus = p_bus;
@@ -527,9 +565,10 @@ int core_load(char **file_paths, struct core *p_core, uint32_t *mem, struct bus 
 	p_core->p_cache->dsram_dump_path = file_paths[PATH_DSRAM0 + p_core->idx];
 	p_core->p_cache->p_core = p_core;
 
-	res = mem_load(file_paths[PATH_IMEME0 + p_core->idx], p_core->imem, IMEM_LEN);
-	if (res < 0)
+	res = mem_load(file_paths[PATH_IMEME0 + p_core->idx], p_core->imem, IMEM_LEN, MEM_LOAD_FILE);
+	if (res < 0) {
 		return -1;
+	}
 
 	for (int i = 0; i < PIPE_MAX; i++) {
 		p_core->pipe[i].npc.q = INVALID_PC;
@@ -547,19 +586,21 @@ void core_trace_pipe(FILE *fp, struct core *p_core)
 
 	pc = p_core->pipe[IF_ID].npc.d;
 
-	if (pc != INVALID_PC)
+	if (pc != INVALID_PC) {
 		fprintf(fp, "%03d ", pc);
-	else
+	} else {
 		fprintf(fp, "--- ");
+	}
 
 
 	for (int i = ID_EX; i < PIPE_MAX + 1; i++) {
 		pc = p_core->pipe[i - 1].npc.q;
 
-		if (pc != INVALID_PC)
+		if (pc != INVALID_PC) {
 			fprintf(fp, "%03d ", pc);
-		else
+		} else {
 			fprintf(fp, "--- ");
+		}
 	}
 }
 
@@ -567,8 +608,9 @@ void core_trace_reg(FILE *fp, struct core *p_core)
 {
 	reg32_t *reg = p_core->reg;
 
-	for (int i = 2; i < REG_MAX; i++)
+	for (int i = 2; i < REG_MAX; i++) {
 		fprintf(fp, "%08X ", reg[i].q);
+	}
 }
 
 int core_trace(struct core *p_core)
@@ -589,13 +631,12 @@ int core_trace(struct core *p_core)
 	return 0;
 }
 
-// TODO:
-void core_stats(struct core *p_core)
+void core_stats_inc(struct core *p_core, uint8_t stat)
 {
-	// TODO:
+	p_core->stats[stat]++;
 }
 
-void core_snoop_rd_x_write_bus(struct core *p_core)
+void core_snoop1_bus_rd_x(struct core *p_core)
 {
 	struct cache *p_cache = p_core->p_cache;
 	struct bus *p_bus = p_cache->p_bus;
@@ -607,14 +648,14 @@ void core_snoop_rd_x_write_bus(struct core *p_core)
 
 	if (cache_hit(p_cache, p_bus->addr)) {
 		if (cache_state_get(p_cache, idx) == MESI_MODIFIED) {
-			cache_flush_block(p_cache, idx);
+			cache_flush_block(p_cache, idx, true);
 		}
 
 		cache_state_set(p_cache, idx, MESI_INVALID);
 	}
 }
 
-void core_snoop_rd_write_bus(struct core *p_core)
+void core_snoop1_bus_rd(struct core *p_core)
 {
 	struct cache *p_cache = p_core->p_cache;
 	struct bus *p_bus = p_cache->p_bus;
@@ -626,25 +667,26 @@ void core_snoop_rd_write_bus(struct core *p_core)
 
 	if (cache_hit(p_cache, p_bus->addr)) {
 		if (cache_state_get(p_cache, idx) == MESI_MODIFIED) {
-			cache_flush_block(p_cache, idx);
+			cache_flush_block(p_cache, idx, true);
 		}
 
 		cache_state_set(p_cache, idx, MESI_SHARED);
 	}
 }
 
-void core_snoop_flush_write_bus(struct core *p_core)
+void core_snoop1_bus_flush(struct core *p_core)
 {
 	struct cache *p_cache = p_core->p_cache;
 	struct bus *p_bus = p_cache->p_bus;
 	uint8_t idx = ADDR_IDX_GET(p_bus->addr);
 
-	if (p_bus->rd_user == p_core->idx) {
+	if (bus_user_get(p_bus) == p_core->idx) {
 		return;
 	}
 
 	if (p_bus->flusher == p_core->idx) {
-		cache_flush_block(p_cache, idx);
+		// flushing to other core
+		cache_flush_block(p_cache, idx, true);
 	} else {
 		if (cache_hit(p_cache, p_bus->addr)) {
 			p_bus->shared = true;
@@ -667,23 +709,24 @@ void core_snoop_flush_write_bus(struct core *p_core)
 	}
 }
 
-void core_snoop_write_bus(struct core *p_core)
+void core_snoop1(struct core *p_core)
 {
 	struct cache *p_cache = p_core->p_cache;
 	struct bus *p_bus = p_cache->p_bus;
 
-	/* first core to meet rd/rd_x will change to flush */
+	/* first core to snoop rd/rd_x and has block 
+	 * will place flush command on the bus */
 	switch (bus_cmd_get(p_bus)) {
 	case BUS_CMD_BUS_RD:
-		core_snoop_rd_write_bus(p_core);
+		core_snoop1_bus_rd(p_core);
 		break;
 
 	case BUS_CMD_BUS_RD_X:
-		core_snoop_rd_x_write_bus(p_core);
+		core_snoop1_bus_rd_x(p_core);
 		break;
 
 	case BUS_CMD_FLUSH:
-		core_snoop_flush_write_bus(p_core);
+		core_snoop1_bus_flush(p_core);
 		break;
 
 	default:
@@ -691,38 +734,44 @@ void core_snoop_write_bus(struct core *p_core)
 	}
 }
 
-void core_snoop_flush_read_bus(struct core *p_core)
+void core_snoop2_bus_flush(struct core *p_core)
 {
 	struct cache *p_cache = p_core->p_cache;
 	struct bus *p_bus = p_cache->p_bus;
 	uint8_t idx = ADDR_IDX_GET(p_bus->addr);
 
-	if (p_bus->rd_user == p_core->idx) {
-		dbg_verbose("[core%d] bus has my data: addr=%05x, data=%08x, from=%x, shared=%d\n", p_core->idx,
-			    p_bus->addr, p_bus->data, p_bus->origid, p_bus->shared);
-		cache_write(p_cache, p_bus->addr, p_bus->data);
-		cache_state_set(p_cache, idx, p_bus->shared ? MESI_SHARED : MESI_EXCLUSIVE);
+	if (bus_user_get(p_bus) == p_core->idx) {
+		if (p_bus->flusher == p_core->idx) {
+			cache_flush_block(p_cache, idx, false);
+		} else {
+			cache_write(p_cache, p_bus->addr, p_bus->data);
+			cache_state_set(p_cache, idx, p_bus->shared ? MESI_SHARED : MESI_EXCLUSIVE);
+			cache_tag_set(p_cache, idx, ADDR_TAG_GET(p_bus->addr));
 
-		if (p_bus->flush_cnt == BLOCK_LEN) {
-			dbg_verbose("[core%d] last data arrived, clearing bus\n", p_core->idx);
-			bus_trace(p_bus); // must trace before clearing
-			bus_clear(p_bus);
+			dbg_verbose("[core%d][snoop] addr=%05x, data=%08x, from=%x, mesi=%d\n", p_core->idx,
+				    p_bus->addr, p_bus->data, p_bus->origid, cache_state_get(p_cache, idx));
+
+			if (p_bus->flush_cnt == BLOCK_LEN) {
+				bus_trace(p_bus); // FIXME: must trace before clearing. not elegant
+				bus_clear(p_bus);
+			}
 		}
 	}
 }
 
-void core_snoop_read_bus(struct core *p_core)
+void core_snoop2(struct core *p_core)
 {
 	struct cache *p_cache = p_core->p_cache;
 	struct bus *p_bus = p_cache->p_bus;
 
-	if (p_bus->origid == p_core->idx) {
+	if (p_bus->origid == p_core->idx &&
+	    p_bus->flusher != p_core->idx) {
 		return;
 	}
 
 	switch (bus_cmd_get(p_bus)) {
 	case BUS_CMD_FLUSH:
-		core_snoop_flush_read_bus(p_core);
+		core_snoop2_bus_flush(p_core);
 		break;
 
 	default:
@@ -732,14 +781,13 @@ void core_snoop_read_bus(struct core *p_core)
 
 void core_cycle(struct core *p_core)
 {
-	core_snoop_read_bus(p_core);
+	core_snoop2(p_core);
 	core_fetch_instruction(p_core);
 	core_decode_instruction(p_core);
 	core_execute_instruction(p_core);
 	core_memory_access(p_core);
 	core_write_back(p_core);
 	core_trace(p_core);
-	core_stats(p_core);
 }
 
 void core_clock_tick(struct core *p_core)
@@ -747,15 +795,18 @@ void core_clock_tick(struct core *p_core)
 	reg32_t *reg = p_core->reg;
 	struct pipe *pipe;
 
-	for (int i = 0; i < REG_MAX; i++)
+	for (int i = 0; i < REG_MAX; i++) {
 		reg[i].q = reg[i].d;
+	}
 	
 	for (int i = 0; i < PIPE_MAX; i++) {
-		if (p_core->stall_decode && i == IF_ID)
+		if (p_core->stall_decode && i == IF_ID) {
 			continue;
+		}
 
-		if (p_core->stall_mem && i != MEM_WB)
+		if (p_core->stall_mem && i != MEM_WB) {
 			continue;
+		}
 
 		pipe = &p_core->pipe[i];
 		pipe->npc.q = pipe->npc.d;
@@ -778,8 +829,9 @@ bool core_is_halt(struct core *p_core)
 
 bool core_is_done(struct core *p_core)
 {
-	if (p_core->done)
+	if (p_core->done) {
 		return true;
+	}
 
 	if (core_is_halt(p_core)) {
 		for (int i = 0; i < PIPE_MAX; i++) {
@@ -787,14 +839,31 @@ bool core_is_done(struct core *p_core)
 				return false;
 		}
 
-		dbg_info("core%d is done. g_clk=%d\n", p_core->idx, g_clk);
+		dbg_info("[core%d] done. clk=%d\n", p_core->idx, g_clk);
 		p_core->done = true;
 	}
 
 	return p_core->done;
 }
 
-int core_dump(struct core *p_core)
+int core_stats_dump(struct core *p_core)
+{
+	FILE *fp = NULL;
+
+	if (!(fp = fopen(p_core->stats_dump_path, "w"))) {
+		print_error("Failed to open \"%s\"", p_core->reg_dump_path);
+		return -1;
+	}
+
+	for (int i = 0; i < STATS_MAX; i++) {
+		fprintf(fp, "%s %d\n", core_stat_name_2_str[i], p_core->stats[i]);
+	}
+
+	fclose(fp);
+	return 0;
+}
+
+int core_regs_dump(struct core *p_core)
 {
 	FILE *fp = NULL;
 
@@ -803,9 +872,20 @@ int core_dump(struct core *p_core)
 		return -1;
 	}
 
-	for (int i = 2; i < REG_MAX; i++)
+	for (int i = 2; i < REG_MAX; i++) {
 		fprintf(fp, "%08x\n", p_core->reg[i].q);
+	}
 
 	fclose(fp);
 	return 0;
+}
+
+int core_dump(struct core *p_core)
+{
+	int res = 0;
+
+	res |= core_regs_dump(p_core);
+	res |= core_stats_dump(p_core);
+
+	return res;
 }
