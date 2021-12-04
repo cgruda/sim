@@ -16,7 +16,7 @@ enum dbg_level {
 };
 
 #define dbg_stamp() printf("[%s][%d]", __func__, __LINE__)
-#define DBG_LEVEL	DBG_INFO
+#define DBG_LEVEL	DBG_MAX
 
 const char *dbg_level_stamp[DBG_MAX];
 

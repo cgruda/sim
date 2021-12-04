@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "cache.h"
 
 #define REG_MAX 16
 #define IMEM_LEN 1024
@@ -79,34 +78,31 @@ struct pipe {
 	reg32_t ir;
 };
 
-struct core_flags {
-	uint32_t halt  : 1,
-		 stall : 1;
-};
-
 struct core {
-	uint32_t flags;
 	int idx;
 	reg32_t pc;
 	reg32_t reg[REG_MAX];
 	uint32_t *imem;
-	struct cache *cache;
+	struct cache *p_cache;
 	struct pipe pipe[PIPE_MAX];
 	bool halt;
-	uint32_t *mem;
+	int stats[STATS_MAX];
+	bool stall_decode;
+	bool stall_mem;
+	bool done;
+
 	char *trace_path;
 	char *stats_path;
-	int stats[STATS_MAX];
-	bool stall;
-	bool done;
+	char *reg_dump_path;
 };
 
 struct core *core_alloc(int idx);
-int core_load(char **file_paths, struct core *p_core, uint32_t *main_mem);
+int core_load(char **file_paths, struct core *p_core, uint32_t *mem, struct bus *p_bus);
 void core_free(struct core *p_core);
 void core_cycle(struct core *p_core);
 void core_clock_tick(struct core *p_core);
 bool core_is_done(struct core *p_core);
-int core_dump_reg(char *path, struct core *p_core);
+int core_dump(struct core *p_core);
+void core_snoop_write_bus(struct core *p_core);
 
 #endif

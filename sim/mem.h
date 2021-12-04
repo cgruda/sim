@@ -4,12 +4,24 @@
 #include <stdint.h>
 
 #define MEM_LEN (1 << 20)
+#define MEM_ADDR_MASK 0x000FFFFF
+#define MEM_DATA_DELAY 16
+
+struct bus;
+
+struct mem {
+	uint32_t *data;
+	struct bus *p_bus;
+	uint8_t flush_delay;
+	char *dump_path;
+};
 
 uint32_t *mem_alloc(int len);
 void mem_free(uint32_t *p_mem);
 int mem_load(char *path, uint32_t *mem, int len);
-int mem_dump(char *path, uint32_t *mem, int len);
-void mem_write(uint32_t *mem, uint32_t addr, uint32_t data);
-uint32_t mem_read(uint32_t *mem, uint32_t addr);
+int mem_dump(struct mem *p_mem);
+void mem_write(struct mem *p_mem, uint32_t addr, uint32_t data);
+uint32_t mem_read(struct mem *p_mem, uint32_t addr);
+void mem_snoop(struct mem *p_mem, struct bus *p_bus);
 
 #endif

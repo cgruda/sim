@@ -32,8 +32,11 @@ enum files {
 	PATH_MAX
 };
 
-#define BIT(x)	(1U << (x))
-#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#define BIT(x)			(1U << (x))
+#define BIT_SET(map, x)		((map) |= BIT(x))
+#define BIT_CLR(map, x)		((map) &= ~BIT(x))
+#define MAX(x, y) 		((x) > (y) ? (x) : (y))
+
 
 extern int g_clk;
 const char *default_paths[PATH_MAX];

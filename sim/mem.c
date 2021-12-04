@@ -1,8 +1,8 @@
 #include "dbg.h"
 #include <stdlib.h>
 #include "mem.h"
-
-#define ADDR_MASK 0x000FFFFF
+#include "bus.h"
+#include "cache.h"
 
 uint32_t *mem_alloc(int len)
 {
@@ -18,7 +18,7 @@ uint32_t *mem_alloc(int len)
 void mem_free(uint32_t *p_mem)
 {
 	if (!p_mem) {
-		dbg_warning("Invalid memory\n");
+		dbg_warning("invalid memory\n");
 		return;
 	}
 
@@ -52,28 +52,73 @@ int mem_load(char *path, uint32_t *mem, int len)
 	return 0;
 }
 
-int mem_dump(char *path, uint32_t *mem, int len)
+int mem_dump(struct mem *p_mem)
 {
 	FILE *fp = NULL;
 
-	if (!(fp = fopen(path, "w"))) {
-		print_error("Failed to open \"%s\"", path);
+	if (!(fp = fopen(p_mem->dump_path, "w"))) {
+		print_error("Failed to open \"%s\"", p_mem->dump_path);
 		return -1;
 	}
 
-	for (int i = 0; i < len; i++)
-		fprintf(fp, "%08x\n", mem[i]);
+	for (int i = 0; i < MEM_LEN; i++)
+		fprintf(fp, "%08x\n", p_mem->data[i]);
 
 	fclose(fp);
 	return 0;
 }
 
-void mem_write(uint32_t *mem, uint32_t addr, uint32_t data)
+void mem_write(struct mem *p_mem, uint32_t addr, uint32_t data)
 {
-	mem[addr & ADDR_MASK] = data;
+	p_mem->data[addr & MEM_ADDR_MASK] = data;
 }
 
-uint32_t mem_read(uint32_t *mem, uint32_t addr)
+uint32_t mem_read(struct mem *p_mem, uint32_t addr)
 {
-	return mem[addr & ADDR_MASK];
+	return p_mem->data[addr & MEM_ADDR_MASK];
+}
+
+void mem_flush_block(struct mem *p_mem, uint32_t addr)
+{
+	struct bus *p_bus = p_mem->p_bus;
+	p_bus->flusher = ORIGID_MAIN_MEM;
+	uint32_t base_addr = addr & ~ADDR_OFT_MSK;
+
+	if (p_mem->flush_delay) {
+		p_mem->flush_delay--;
+		return;
+	}
+
+	uint32_t flush_addr = base_addr + p_bus->flush_cnt;
+	uint32_t flush_data = mem_read(p_mem, flush_addr);
+
+	bus_cmd_set(p_bus, ORIGID_MAIN_MEM, BUS_CMD_FLUSH, flush_addr, flush_data);
+	dbg_verbose("[mem] bus flush: addr=%05x, data=%08x\n", flush_addr, flush_data);
+	// FIXME:NOTE: i dont set bus_shared!!
+	p_bus->flush_cnt++;
+}
+
+void mem_snoop(struct mem *p_mem, struct bus *p_bus)
+{
+	if (p_bus->flusher == ORIGID_MAIN_MEM) {
+		mem_flush_block(p_mem, p_bus->addr);
+		return;
+	}
+
+	switch(bus_cmd_get(p_bus)) {
+	case BUS_CMD_BUS_RD:
+	case BUS_CMD_BUS_RD_X:
+		dbg_verbose("[mem][snoop] cmd=%x, orig=%x\n", p_bus->cmd, p_bus->origid);
+		p_mem->flush_delay = MEM_DATA_DELAY;
+		p_bus->flusher = ORIGID_MAIN_MEM;
+		p_bus->cmd = BUS_CMD_NONE;
+		break;
+
+	case BUS_CMD_FLUSH:
+		mem_write(p_mem, p_bus->addr, p_bus->data);
+		break;
+
+	default:
+		break;
+	}
 }

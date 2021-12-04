@@ -43,9 +43,11 @@ void core_branch_resolution(struct core *p_core, uint8_t op, uint8_t rtv, uint8_
 	case OP_BEQ:
 		branch = rsv == rtv;
 		break;
+
 	case OP_BNE:
 		branch = rsv != rtv;
 		break;
+
 	case OP_BLT:
 		if (IS_NEGATIVE(rsv) && IS_NEGATIVE(rtv))
 			branch = rsv > rtv;
@@ -54,6 +56,7 @@ void core_branch_resolution(struct core *p_core, uint8_t op, uint8_t rtv, uint8_
 		else if (IS_NEGATIVE(rsv) && IS_POSITIVE(rtv))
 			branch = true;
 		break;
+
 	case OP_BGT:
 		if (IS_NEGATIVE(rsv) && IS_NEGATIVE(rtv))
 			branch = rsv < rtv;
@@ -62,6 +65,7 @@ void core_branch_resolution(struct core *p_core, uint8_t op, uint8_t rtv, uint8_
 		else if (IS_POSITIVE(rsv) && IS_NEGATIVE(rtv))
 			branch = true;
 		break;
+
 	case OP_BLE:
 		if (IS_NEGATIVE(rsv) && IS_NEGATIVE(rtv))
 			branch = rsv >= rtv;
@@ -70,6 +74,7 @@ void core_branch_resolution(struct core *p_core, uint8_t op, uint8_t rtv, uint8_
 		else if (IS_NEGATIVE(rsv) && IS_POSITIVE(rtv))
 			branch = true;
 		break;
+
 	case OP_BGE:
 		if (IS_NEGATIVE(rsv) && IS_NEGATIVE(rtv))
 			branch = rsv <= rtv;
@@ -78,12 +83,14 @@ void core_branch_resolution(struct core *p_core, uint8_t op, uint8_t rtv, uint8_
 		else if (IS_POSITIVE(rsv) && IS_NEGATIVE(rtv))
 			branch = true;
 		break;
+
 	case OP_JAL:
 		id_ex->dst.d = 15;
 		id_ex->alu.d = p_core->pc.q + 1;
 		// reg[15].d = p_core->pc.q + 1;
 		branch = true;
 		break;
+
 	default:
 		branch = false;
 		break;
@@ -95,24 +102,7 @@ void core_branch_resolution(struct core *p_core, uint8_t op, uint8_t rtv, uint8_
 		p_core->pc.d = p_core->pc.q + 1;
 }
 
-void core_fetch_instruction(struct core *p_core)
-{
-	struct pipe *if_id = &p_core->pipe[IF_ID];
-	uint32_t *imem = p_core->imem;
-	uint32_t pc = p_core->pc.q;
-
-	if (p_core->stall) {
-		dbg_verbose("[core%d][fetch] Stall\n", p_core->idx);
-		return;
-	}
-
-	if_id->ir.d = imem[pc & PC_MASK];
-	if_id->npc.d = pc;
-
-	dbg_verbose("[core%d][fetch] pc=%d\n", p_core->idx, pc);
-}
-
-bool core_read_after_write_hazard(struct core *p_core, uint32_t id_inst)
+bool core_hazard_raw(struct core *p_core, uint32_t id_inst)
 {
 	bool hazard = false;
 	bool hazard_rd = false;
@@ -151,19 +141,81 @@ bool core_read_after_write_hazard(struct core *p_core, uint32_t id_inst)
 	return hazard;
 }
 
-void core_stall(struct core *p_core)
+void core_stall(struct core *p_core, uint8_t stage)
 {
 	struct pipe *id_ex = &p_core->pipe[ID_EX];
+	struct pipe *ex_mem = &p_core->pipe[EX_MEM];
+	struct pipe *mem_wb = &p_core->pipe[MEM_WB];
 
-	id_ex->dst.d = 0;
-	id_ex->npc.d = INVALID_PC;
+	switch(stage) {
+	case ID_EX:
+		id_ex->dst.d = 0;
+		id_ex->npc.d = INVALID_PC;
+		p_core->stall_decode = true;
+		break;
 
-	p_core->stall = true;
+	case MEM_WB:
+		mem_wb->npc.d = INVALID_PC;
+		p_core->stall_mem = true;
+		break;
+	}
 }
 
-void core_unstall(struct core *p_core)
+void core_write(struct core *p_core, uint32_t addr, uint32_t data, bool *write_done)
 {
-	p_core->stall = false;
+	struct cache *p_cache = p_core->p_cache;
+
+	if (cache_hit(p_cache, addr)) {
+		*write_done = true;
+		cache_write(p_cache, addr, data);
+
+		// invalidate other cahces that hold modified block
+		if (cache_state_get(p_cache, ADDR_IDX_GET(addr)) == MESI_SHARED)
+			bus_read_x(p_core, addr);
+
+		uint8_t idx = ADDR_IDX_GET(addr);
+		cache_state_set(p_cache, idx, MESI_MODIFIED);
+	} else {
+		*write_done = false;
+		// TODO: might need to evict!!!
+		bus_read_x(p_core, addr);
+	}
+}
+
+uint32_t core_read(struct core *p_core, uint32_t addr, bool *read_done)
+{
+	struct cache *p_cache = p_core->p_cache;
+	uint32_t data = 0;
+
+	if (cache_hit(p_cache, addr)) {
+		*read_done = true;
+		data = cache_read(p_cache, addr);
+		dbg_verbose("[core%d][PrRD][HIT] read addr=%05x, data=%08x\n", p_core->idx, addr, data);
+	} else {
+		*read_done = false;
+		// TODO: might need to evict!!!
+		dbg_verbose("[core%d][PrRD][MISS] read addr=%05x\n", p_core->idx, addr);
+		bus_read(p_core, addr);
+	}
+
+	return data;
+}
+
+void core_fetch_instruction(struct core *p_core)
+{
+	struct pipe *if_id = &p_core->pipe[IF_ID];
+	uint32_t *imem = p_core->imem;
+	uint32_t pc = p_core->pc.q;
+
+	if (p_core->stall_decode || p_core->stall_mem) {
+		dbg_verbose("[core%d][fetch] stall\n", p_core->idx);
+		return;
+	}
+
+	if_id->ir.d = imem[pc & PC_MASK];
+	if_id->npc.d = pc;
+
+	dbg_verbose("[core%d][fetch] pc=%d\n", p_core->idx, pc);
 }
 
 void core_decode_instruction(struct core *p_core)
@@ -174,6 +226,11 @@ void core_decode_instruction(struct core *p_core)
 	uint32_t sign_extended_imm = 0;
 	reg32_t *reg = p_core->reg;
 	uint32_t inst = if_id->ir.q;
+
+	if (p_core->stall_mem) {
+		dbg_verbose("[core%d][decode] stall\n", p_core->idx);
+		return;
+	}
 
 	uint8_t op = INST_OP_GET(inst);
 	uint8_t rd = INST_RD_GET(inst);
@@ -187,16 +244,16 @@ void core_decode_instruction(struct core *p_core)
 		if (!p_core->halt)
 			p_core->pc.d = p_core->pc.q + 1;
 
-		dbg_verbose("[core%d][decode] Invalid pc\n", p_core->idx);
+		dbg_verbose("[core%d][decode] invalid pc\n", p_core->idx);
 		return;
 	}
 
-	if (core_read_after_write_hazard(p_core, inst)) {
+	if (core_hazard_raw(p_core, inst)) {
 		dbg_verbose("[core%d][descode] RAW Hazard! pc=%d, inst=%08x\n", p_core->idx, if_id->npc.q, inst);
-		core_stall(p_core);
+		core_stall(p_core, ID_EX);
 		return;
 	} else {
-		core_unstall(p_core);
+		p_core->stall_decode = false;
 	}
 
 	// sign extend and store imm value in reg1 (D and Q)
@@ -226,10 +283,15 @@ void core_execute_instruction(struct core *p_core)
 	uint32_t op = INST_OP_GET(id_ex->ir.q);
 	uint32_t alu = 0;
 
+	if (p_core->stall_mem) {
+		dbg_verbose("[core%d][execute] stall\n", p_core->idx);
+		return;
+	}
+
 	if (id_ex->npc.q == INVALID_PC) {
 		ex_mem->npc.d = id_ex->npc.q;
 		ex_mem->dst.d = id_ex->dst.q;
-		dbg_verbose("[core%d][execute] Invalid pc\n", p_core->idx);
+		dbg_verbose("[core%d][execute] invalid pc\n", p_core->idx);
 		return;
 	}
 
@@ -303,7 +365,7 @@ void core_execute_instruction(struct core *p_core)
 		break;
 
 	default:
-		dbg_warning("Invalid op=%d\n", op);
+		dbg_warning("invalid op=%d\n", op);
 		break;
 	}
 
@@ -322,30 +384,51 @@ void core_memory_access(struct core *p_core)
 	struct pipe *ex_mem = &p_core->pipe[EX_MEM];
 	struct pipe *mem_wb = &p_core->pipe[MEM_WB];
 	uint32_t op = INST_OP_GET(ex_mem->ir.q);
-	uint32_t *mem = p_core->mem;
 	uint32_t addr = ex_mem->alu.q;
 	uint32_t data = 0;
+	bool rw_done = false;
+	bool rw_check = true;
+
+	if (p_core->stall_mem) {
+		if (p_core->p_cache->p_bus->rd_user != p_core->idx) { // bus was cleared
+			if (!cache_hit(p_core->p_cache, addr)) {
+				dbg_error("[core%d][memory] something is wrong\n", p_core->idx);
+				return;
+			}
+			p_core->stall_mem = false;
+			dbg_verbose("[core%d][memory] stall done\n", p_core->idx);
+		} else {
+			dbg_verbose("[core%d][memory] ongoing stall\n", p_core->idx);
+			return;
+		}
+	}
 
 	if (ex_mem->npc.q == INVALID_PC) {
 		mem_wb->npc.d = ex_mem->npc.q;
 		mem_wb->dst.d = ex_mem->dst.q;
-		dbg_verbose("[core%d][memory] Invalid pc\n", p_core->idx);
+		dbg_verbose("[core%d][memory] invalid pc\n", p_core->idx);
 		return;
 	}
 
-	// access main memory // TODO: this is remporary direct access
 	switch(op) {
 	case OP_LW:
-		data = mem_read(mem, addr);
+		data = core_read(p_core, addr, &rw_done);
 		break;
 
 	case OP_SW:
 		data = ex_mem->rdv.q;
-		mem_write(mem, addr, data);
+		core_write(p_core, addr, data, &rw_done);
 		break;
 
 	default:
+		rw_check = false;
 		break;
+	}
+
+	if (rw_check && !rw_done) {
+		core_stall(p_core, MEM_WB);
+		dbg_verbose("[core%d][memory] mem_stall [pc=%d;op=%x;addr=%08x]\n", p_core->idx, ex_mem->npc.q, op, addr);
+		return;
 	}
 
 	dbg_verbose("[core%d][memory] pc=%d, op=%d, addr=%08x, data=%08x\n", p_core->idx, ex_mem->npc.q, op, addr, data);
@@ -366,7 +449,7 @@ void core_write_back(struct core *p_core)
 	uint8_t val = 0;
 
 	if (mem_wb->npc.q == INVALID_PC) {
-		dbg_verbose("[core%d][writeback] Invalid pc\n", p_core->idx);
+		dbg_verbose("[core%d][writeback] invalid pc\n", p_core->idx);
 		return;
 	}
 
@@ -386,12 +469,12 @@ void core_write_back(struct core *p_core)
 void core_free(struct core *p_core)
 {
 	if (!p_core) {
-		dbg_warning("Invalid core\n");
+		dbg_warning("invalid core\n");
 		return;
 	}
 
-	if (p_core->cache)
-		cache_free(p_core->cache);
+	if (p_core->p_cache)
+		cache_free(p_core->p_cache);
 	
 	if (p_core->imem)
 		mem_free(p_core->imem);
@@ -402,7 +485,7 @@ struct core *core_alloc(int idx)
 	struct core *p_core = NULL;
 
 	if (idx >= CORE_MAX) {
-		dbg_error("Invalid core_idx=%d, max cores allowed is %d\n", idx, CORE_MAX);
+		dbg_error("invalid core_idx=%d, max cores allowed is %d\n", idx, CORE_MAX);
 		return NULL;
 	}
 
@@ -412,8 +495,8 @@ struct core *core_alloc(int idx)
 		return NULL;
 	}
 
-	p_core->cache = cache_alloc();
-	if (!p_core->cache) {
+	p_core->p_cache = cache_alloc();
+	if (!p_core->p_cache) {
 		dbg_error("Failed to allocate core cache\n");
 		core_free(p_core);
 		return NULL;
@@ -431,13 +514,18 @@ struct core *core_alloc(int idx)
 	return p_core;
 }
 
-int core_load(char **file_paths, struct core *p_core, uint32_t *main_mem)
+int core_load(char **file_paths, struct core *p_core, uint32_t *mem, struct bus *p_bus)
 {
 	int res = 0;
 
 	p_core->trace_path = file_paths[PATH_CORE0TRACE + p_core->idx];
-	p_core->mem = main_mem; // FIXME: temp
-	p_core->cache->p_bus = &bus;
+	p_core->reg_dump_path = file_paths[PATH_REGOUT0 + p_core->idx];
+
+	// TODO: redo this
+	p_core->p_cache->p_bus = p_bus;
+	p_core->p_cache->tsram_dump_path = file_paths[PATH_TSRAM0 + p_core->idx];
+	p_core->p_cache->dsram_dump_path = file_paths[PATH_DSRAM0 + p_core->idx];
+	p_core->p_cache->p_core = p_core;
 
 	res = mem_load(file_paths[PATH_IMEME0 + p_core->idx], p_core->imem, IMEM_LEN);
 	if (res < 0)
@@ -501,21 +589,155 @@ int core_trace(struct core *p_core)
 	return 0;
 }
 
+// TODO:
 void core_stats(struct core *p_core)
 {
 	// TODO:
 }
 
+void core_snoop_rd_x_write_bus(struct core *p_core)
+{
+	struct cache *p_cache = p_core->p_cache;
+	struct bus *p_bus = p_cache->p_bus;
+	uint8_t idx = ADDR_IDX_GET(p_bus->addr);
+
+	if (p_bus->origid == p_core->idx) {
+		return;
+	}
+
+	if (cache_hit(p_cache, p_bus->addr)) {
+		if (cache_state_get(p_cache, idx) == MESI_MODIFIED) {
+			cache_flush_block(p_cache, idx);
+		}
+
+		cache_state_set(p_cache, idx, MESI_INVALID);
+	}
+}
+
+void core_snoop_rd_write_bus(struct core *p_core)
+{
+	struct cache *p_cache = p_core->p_cache;
+	struct bus *p_bus = p_cache->p_bus;
+	uint8_t idx = ADDR_IDX_GET(p_bus->addr);
+
+	if (p_bus->origid == p_core->idx) {
+		return;
+	}
+
+	if (cache_hit(p_cache, p_bus->addr)) {
+		if (cache_state_get(p_cache, idx) == MESI_MODIFIED) {
+			cache_flush_block(p_cache, idx);
+		}
+
+		cache_state_set(p_cache, idx, MESI_SHARED);
+	}
+}
+
+void core_snoop_flush_write_bus(struct core *p_core)
+{
+	struct cache *p_cache = p_core->p_cache;
+	struct bus *p_bus = p_cache->p_bus;
+	uint8_t idx = ADDR_IDX_GET(p_bus->addr);
+
+	if (p_bus->rd_user == p_core->idx) {
+		return;
+	}
+
+	if (p_bus->flusher == p_core->idx) {
+		cache_flush_block(p_cache, idx);
+	} else {
+		if (cache_hit(p_cache, p_bus->addr)) {
+			p_bus->shared = true;
+			switch (p_bus->rd_type) {
+			case BUS_CMD_BUS_RD:
+				if (cache_state_get(p_cache, idx) == MESI_EXCLUSIVE) {
+					cache_state_set(p_cache, idx, MESI_SHARED);
+					p_bus->shared = true; // FIXME: correct?
+				}
+				break;
+
+			case BUS_CMD_BUS_RD_X:
+				cache_state_set(p_cache, idx, MESI_INVALID);
+				break;
+
+			default:
+				break;
+			}
+		}
+	}
+}
+
+void core_snoop_write_bus(struct core *p_core)
+{
+	struct cache *p_cache = p_core->p_cache;
+	struct bus *p_bus = p_cache->p_bus;
+
+	/* first core to meet rd/rd_x will change to flush */
+	switch (bus_cmd_get(p_bus)) {
+	case BUS_CMD_BUS_RD:
+		core_snoop_rd_write_bus(p_core);
+		break;
+
+	case BUS_CMD_BUS_RD_X:
+		core_snoop_rd_x_write_bus(p_core);
+		break;
+
+	case BUS_CMD_FLUSH:
+		core_snoop_flush_write_bus(p_core);
+		break;
+
+	default:
+		break;
+	}
+}
+
+void core_snoop_flush_read_bus(struct core *p_core)
+{
+	struct cache *p_cache = p_core->p_cache;
+	struct bus *p_bus = p_cache->p_bus;
+	uint8_t idx = ADDR_IDX_GET(p_bus->addr);
+
+	if (p_bus->rd_user == p_core->idx) {
+		dbg_verbose("[core%d] bus has my data: addr=%05x, data=%08x, from=%x, shared=%d\n", p_core->idx,
+			    p_bus->addr, p_bus->data, p_bus->origid, p_bus->shared);
+		cache_write(p_cache, p_bus->addr, p_bus->data);
+		cache_state_set(p_cache, idx, p_bus->shared ? MESI_SHARED : MESI_EXCLUSIVE);
+
+		if (p_bus->flush_cnt == BLOCK_LEN) {
+			dbg_verbose("[core%d] last data arrived, clearing bus\n", p_core->idx);
+			bus_trace(p_bus); // must trace before clearing
+			bus_clear(p_bus);
+		}
+	}
+}
+
+void core_snoop_read_bus(struct core *p_core)
+{
+	struct cache *p_cache = p_core->p_cache;
+	struct bus *p_bus = p_cache->p_bus;
+
+	if (p_bus->origid == p_core->idx) {
+		return;
+	}
+
+	switch (bus_cmd_get(p_bus)) {
+	case BUS_CMD_FLUSH:
+		core_snoop_flush_read_bus(p_core);
+		break;
+
+	default:
+		break;
+	}
+}
+
 void core_cycle(struct core *p_core)
 {
-	// core functionality
+	core_snoop_read_bus(p_core);
 	core_fetch_instruction(p_core);
 	core_decode_instruction(p_core);
 	core_execute_instruction(p_core);
 	core_memory_access(p_core);
 	core_write_back(p_core);
-
-	// core race and stats
 	core_trace(p_core);
 	core_stats(p_core);
 }
@@ -529,7 +751,10 @@ void core_clock_tick(struct core *p_core)
 		reg[i].q = reg[i].d;
 	
 	for (int i = 0; i < PIPE_MAX; i++) {
-		if (p_core->stall && i == IF_ID)
+		if (p_core->stall_decode && i == IF_ID)
+			continue;
+
+		if (p_core->stall_mem && i != MEM_WB)
 			continue;
 
 		pipe = &p_core->pipe[i];
@@ -569,12 +794,12 @@ bool core_is_done(struct core *p_core)
 	return p_core->done;
 }
 
-int core_dump_reg(char *path, struct core *p_core)
+int core_dump(struct core *p_core)
 {
 	FILE *fp = NULL;
 
-	if (!(fp = fopen(path, "w"))) {
-		print_error("Failed to open \"%s\"", path);
+	if (!(fp = fopen(p_core->reg_dump_path, "w"))) {
+		print_error("Failed to open \"%s\"", p_core->reg_dump_path);
 		return -1;
 	}
 
