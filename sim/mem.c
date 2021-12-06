@@ -119,7 +119,7 @@ void mem_snoop(struct mem *p_mem)
 	switch(bus_cmd_get(p_bus)) {
 	case BUS_CMD_BUS_RD:
 	case BUS_CMD_BUS_RD_X:
-		dbg_verbose("[mem][snoop] clk=%d, cmd=%x, orig=%x\n", g_clk, p_bus->cmd, p_bus->origid);
+		dbg_verbose("[mem][snoop] orig=%x, cmd=%x, addr=%05x\n", p_bus->origid, p_bus->cmd, p_bus->addr);
 		p_mem->flush_delay = MEM_DATA_DELAY - 2;
 		p_bus->flusher = ORIGID_MAIN_MEM;
 		p_bus->cmd = BUS_CMD_NONE;

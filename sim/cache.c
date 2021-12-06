@@ -44,7 +44,7 @@ uint16_t cache_tag_get(struct cache *p_cache, uint8_t idx)
 {
 	struct tsram *p_tsram = &p_cache->tsram;
 
-	return (uint8_t)p_tsram->block_info[idx].tag;
+	return (uint16_t)p_tsram->block_info[idx].tag;
 }
 
 void cache_tag_set(struct cache *p_cache, uint8_t idx, uint16_t tag)

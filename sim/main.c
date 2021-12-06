@@ -8,7 +8,7 @@
 #include "cache.h"
 
 #define ARGC_CNT	27
-#define MAX_ITERATIONS  100 // FIXME: for debug
+#define MAX_ITERATIONS  300 // FIXME: for debug
 
 struct sim_env {
 	char **paths;
@@ -19,6 +19,8 @@ struct sim_env {
 
 	uint8_t core_done_bitmap;
 	bool run;
+	uint32_t dbg_max_iterations;
+	uint8_t mem_mode;
 };
 
 int sim_cleanup(struct sim_env *p_env)
@@ -47,6 +49,9 @@ void sim_remove_old_output_files(char **file_paths)
 int sim_init(struct sim_env *p_env, int argc, char **argv)
 {
 	int res = 0;
+	p_env->run = true;
+	p_env->dbg_max_iterations = 0;
+	p_env->mem_mode = MEM_LOAD_FILE;
 
 	if (!argc) {
 		p_env->paths = (char **)&default_paths;
@@ -67,7 +72,7 @@ int sim_init(struct sim_env *p_env, int argc, char **argv)
 
 	p_env->mem.dump_path = p_env->paths[PATH_MEMOUT];
 	p_env->mem.p_bus = &p_env->bus;
-	res = mem_load(p_env->paths[PATH_MEMIN], p_env->mem.data, MEM_LEN, MEM_LOAD_FILE); // FIXME: dummy main mem // MEM_LOAD_DUMMY
+	res = mem_load(p_env->paths[PATH_MEMIN], p_env->mem.data, MEM_LEN, p_env->mem_mode); // FIXME: dummy main mem // MEM_LOAD_DUMMY, MEM_LOAD_FILE
 	if (res < 0) {
 		sim_cleanup(p_env);
 		return -1;
@@ -88,8 +93,6 @@ int sim_init(struct sim_env *p_env, int argc, char **argv)
 			return -1;
 		}
 	}
-
-	p_env->run = true;
 
 	dbg_info("Init done\n");
 
@@ -140,6 +143,11 @@ void sim_run(struct sim_env *p_env)
 		sim_core_cycle(p_env);
 		bus_trace(&p_env->bus); // FIXME: consider moving to start of loop - clock -1 issue
 		sim_clock_tick(p_env);
+
+		if (p_env->dbg_max_iterations &&
+		    g_clk == p_env->dbg_max_iterations) {
+			break;
+		}
 	}
 }
 

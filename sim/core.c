@@ -98,7 +98,6 @@ void core_branch_resolution(struct core *p_core, uint8_t op, uint8_t rtv, uint8_
 	case OP_JAL:
 		id_ex->dst.d = 15;
 		id_ex->alu.d = p_core->pc.q + 1;
-		// reg[15].d = p_core->pc.q + 1;
 		branch = true;
 		break;
 
@@ -114,7 +113,7 @@ void core_branch_resolution(struct core *p_core, uint8_t op, uint8_t rtv, uint8_
 	}
 }
 
-bool core_hazard_raw(struct core *p_core, uint32_t id_inst)
+bool core_hazard_raw(struct core *p_core, uint32_t id_inst, uint16_t *raw_info)
 {
 	bool hazard = false;
 	bool hazard_rd = false;
@@ -138,9 +137,9 @@ bool core_hazard_raw(struct core *p_core, uint32_t id_inst)
 			continue;
 		}
 
-		hazard_rd = rd && (rd == p_pipe->dst.q);
-		hazard_rs = rs && (rs == p_pipe->dst.q);
-		hazard_rt = rt && (rt == p_pipe->dst.q);
+		hazard_rd = (rd > 1) && (rd == p_pipe->dst.q);
+		hazard_rs = (rs > 1) && (rs == p_pipe->dst.q);
+		hazard_rt = (rt > 1) && (rt == p_pipe->dst.q);
 
 		if (op != OP_JAL) {
 			hazard |= hazard_rs || hazard_rt;
@@ -154,6 +153,10 @@ bool core_hazard_raw(struct core *p_core, uint32_t id_inst)
 			break;
 		}
 	}
+
+	*raw_info = (hazard_rd ? (p_pipe->dst.q << 12) : 0) |
+		    (hazard_rs ? (p_pipe->dst.q << 8)  : 0) |
+		    (hazard_rt ? (p_pipe->dst.q << 4)  : 0);
 
 	return hazard;
 }
@@ -190,13 +193,14 @@ void core_write(struct core *p_core, uint32_t addr, uint32_t data, bool *write_d
 		// invalidate other cahces that hold now modified block
 		if (cache_state_get(p_cache, idx) == MESI_SHARED) {
 			bus_read_x(p_core, addr);
+			// FIXME: might need to stall even that write_done!!
 		}
 
 		cache_state_set(p_cache, idx, MESI_MODIFIED);
 	} else {
 		*write_done = false;
 		
-		if (cache_state_get(p_cache, idx) != MESI_MODIFIED) {
+		if (cache_state_get(p_cache, idx) == MESI_MODIFIED) {
 			cache_evict_block(p_cache, idx);
 			return;
 		}
@@ -255,6 +259,7 @@ void core_decode_instruction(struct core *p_core)
 	uint32_t sign_extended_imm = 0;
 	reg32_t *reg = p_core->reg;
 	uint32_t inst = if_id->ir.q;
+	uint16_t raw_info = 0;
 
 	if (p_core->stall_mem) {
 		dbg_verbose("[core%d][decode] stall\n", p_core->idx);
@@ -273,13 +278,13 @@ void core_decode_instruction(struct core *p_core)
 		if (!p_core->halt)
 			p_core->pc.d = p_core->pc.q + 1;
 
-		dbg_verbose("[core%d][decode] invalid pc\n", p_core->idx);
+		dbg_verbose("[core%d][decode]\n", p_core->idx);
 		return;
 	}
 
-	if (core_hazard_raw(p_core, inst, &hazard_info)) {
-		dbg_verbose("[core%d][descode] RAW Hazard! pc=%d, inst=%08x\n",
-			    p_core->idx, if_id->npc.q, inst);
+	if (core_hazard_raw(p_core, inst, &raw_info)) {
+		dbg_verbose("[core%d][decode] RAW Hazard! pc=%d, inst=%08x, raw_info=%04x\n",
+			    p_core->idx, if_id->npc.q, inst, raw_info);
 		core_stall(p_core, ID_EX);
 		return;
 	} else {
@@ -294,7 +299,8 @@ void core_decode_instruction(struct core *p_core)
 	p_core->reg[1].d = im | sign_extention_mask;
 	p_core->reg[1].q = p_core->reg[1].d;
 
-	dbg_verbose("[core%d][decode] pc=%d, inst=%08x\n", p_core->idx, if_id->npc.q, inst);
+	dbg_verbose("[core%d][decode] pc=%d, inst=%08x, imm=%08x\n", p_core->idx,
+		    if_id->npc.q, inst, p_core->reg[1].d);
 
 	id_ex->npc.d = if_id->npc.q;
 	id_ex->rtv.d = reg[rt & REG_MASK].q;
@@ -324,7 +330,7 @@ void core_execute_instruction(struct core *p_core)
 	if (id_ex->npc.q == INVALID_PC) {
 		ex_mem->npc.d = id_ex->npc.q;
 		ex_mem->dst.d = id_ex->dst.q;
-		dbg_verbose("[core%d][execute] invalid pc\n", p_core->idx);
+		dbg_verbose("[core%d][execute]\n", p_core->idx);
 		return;
 	}
 
@@ -398,11 +404,13 @@ void core_execute_instruction(struct core *p_core)
 		break;
 
 	default:
-		dbg_warning("invalid op=%d\n", op);
+		dbg_warning("[core%d][execute] pc=%d, invalid op=%d\n", p_core->idx,
+			    id_ex->npc.q, op);
 		break;
 	}
 
-	dbg_verbose("[core%d][execute] pc=%d, op=%x, alu=%d\n", p_core->idx, id_ex->npc.q, op, alu);
+	dbg_verbose("[core%d][execute] pc=%d, op=%x, rsv=0x%x, rtv=0x%x, ,alu=0x%x\n",
+		    p_core->idx, id_ex->npc.q, op, rsv, rtv, alu);
 
 	ex_mem->npc.d = id_ex->npc.q;
 	ex_mem->alu.d = alu;
@@ -426,6 +434,10 @@ void core_memory_access(struct core *p_core)
 		if (!bus_user_in_queue(p_core->p_cache->p_bus, p_core->idx, NULL)) { // bus was cleared
 			if (cache_hit(p_core->p_cache, addr)) {
 				p_core->stall_mem = false;
+			} else {
+				dbg_verbose("[core%d][memory] miss2, mesi=%d, tag=%03x\n",
+					    p_core->idx, cache_state_get(p_core->p_cache, ADDR_IDX_GET(addr)),
+					    cache_tag_get(p_core->p_cache, ADDR_IDX_GET(addr)));
 			}
 		} else {
 			// TODO: im in queue. what next? when will i get my turn?
@@ -437,7 +449,7 @@ void core_memory_access(struct core *p_core)
 	if (ex_mem->npc.q == INVALID_PC) {
 		mem_wb->npc.d = ex_mem->npc.q;
 		mem_wb->dst.d = ex_mem->dst.q;
-		dbg_verbose("[core%d][memory] invalid pc\n", p_core->idx);
+		dbg_verbose("[core%d][memory]\n", p_core->idx);
 		return;
 	}
 
@@ -479,12 +491,12 @@ void core_write_back(struct core *p_core)
 {
 	reg32_t *reg = p_core->reg;
 	struct pipe *mem_wb = &p_core->pipe[MEM_WB];
-	uint32_t op = INST_OP_GET(mem_wb->ir.q);
+	uint8_t op = INST_OP_GET(mem_wb->ir.q);
+	uint32_t val = 0;
 	uint8_t dst = 0;
-	uint8_t val = 0;
 
 	if (mem_wb->npc.q == INVALID_PC) {
-		dbg_verbose("[core%d][writeback] invalid pc\n", p_core->idx);
+		dbg_verbose("[core%d][writeback]\n", p_core->idx);
 		return;
 	}
 
