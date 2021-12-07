@@ -43,13 +43,51 @@ char *core_stat_name_2_str[STATS_MAX] = {
 	[STATS_MEM_STALL]    = "mem_stall",
 };
 
-void core_branch_resolution(struct core *p_core, uint8_t op, uint8_t rtv, uint8_t rsv, uint8_t rdv)
+char *core_op_2_str[OP_MAX] = {
+	[OP_ADD]  = "+",
+	[OP_SUB]  = "-",
+	[OP_AND]  = "&",
+	[OP_OR]   = "|",
+	[OP_XOR]  = "^",
+	[OP_MUL]  = "*",
+	[OP_SLL]  = "<<",
+	[OP_SRA]  = ">s>",
+	[OP_SRL]  = ">>",
+	[OP_BEQ]  = "==",
+	[OP_BNE]  = "!=",
+	[OP_BLT]  = "<",
+	[OP_BGT]  = ">",
+	[OP_BLE]  = "<=",
+	[OP_BGE]  = ">=",
+	[OP_JAL]  = "N/A",
+	[OP_LW]   = "N/A",
+	[OP_SW]   = "N/A",
+	[OP_RSV1] = "N/A",
+	[OP_RSV2] = "N/A",
+	[OP_HALT] = "N/A",
+};
+
+bool core_is_op_branch(uint8_t op)
+{
+	return ((op >= OP_BEQ) && (op <= OP_JAL));
+}
+
+void core_branch_resolution(struct core *p_core, uint8_t op, uint32_t rtv, uint32_t rsv, uint32_t rdv)
 {
 	struct pipe *id_ex = &p_core->pipe[ID_EX];
 	reg32_t *reg = p_core->reg;
 	bool branch = false;
 	
-	// TODO: delay slot??
+	if (!core_is_op_branch(op)) {
+		p_core->pc.d = p_core->pc.q + 1;
+		return;
+	}
+
+	if (p_core->delay_slot) {
+		dbg_warning("[core%d] control hazard! op=%d ignored\n", p_core->idx, op);
+		return;
+	}
+
 	switch (op) {
 	case OP_BEQ:
 		branch = rsv == rtv;
@@ -102,15 +140,22 @@ void core_branch_resolution(struct core *p_core, uint8_t op, uint8_t rtv, uint8_
 		break;
 
 	default:
+		dbg_warning("[core%d] invalid op! pc=%d, op=%d", p_core->idx, p_core->pc.q, op);
 		branch = false;
 		break;
 	}
 
 	if (branch) {
 		p_core->pc.d = rdv & PC_MASK;
+		p_core->delay_slot = true;
+		p_core->delay_slot_pc = p_core->pc.q;
 	} else {
 		p_core->pc.d = p_core->pc.q + 1;
 	}
+
+	dbg_verbose("[core%d][decode] branch=%s (will fetch pc %d), (0x%08x %s 0x%08x)\n",
+		    p_core->idx, branch ? "Yes" : "No", p_core->pc.d, rsv, core_op_2_str[op],
+		    rtv);
 }
 
 bool core_hazard_raw(struct core *p_core, uint32_t id_inst, uint16_t *raw_info)
@@ -239,6 +284,11 @@ void core_fetch_instruction(struct core *p_core)
 	struct pipe *if_id = &p_core->pipe[IF_ID];
 	uint32_t *imem = p_core->imem;
 	uint32_t pc = p_core->pc.q;
+
+	if (pc == INVALID_PC) {
+		dbg_verbose("[core%d][fetch] (n/a)\n", p_core->idx);
+		return;
+	}
 
 	if (p_core->stall_decode || p_core->stall_mem) {
 		dbg_verbose("[core%d][fetch] stall\n", p_core->idx);
@@ -396,6 +446,10 @@ void core_execute_instruction(struct core *p_core)
 		break;
 
 	case OP_HALT:
+		if (p_core->delay_slot && id_ex->npc.q == p_core->delay_slot_pc) {
+			break;
+		}
+
 		p_core->halt = true;
 		p_core->pc.d = INVALID_PC;
 		p_core->pipe[IF_ID].npc.d = INVALID_PC;
@@ -416,7 +470,7 @@ void core_execute_instruction(struct core *p_core)
 	ex_mem->alu.d = alu;
 	ex_mem->npc.d = id_ex->npc.q;
 	ex_mem->rdv.d = id_ex->rdv.q;
-	ex_mem->dst.d = id_ex->dst.q;  
+	ex_mem->dst.d = id_ex->dst.q;
 	ex_mem->ir.d = id_ex->ir.q;
 }
 
@@ -477,7 +531,7 @@ void core_memory_access(struct core *p_core)
 			return;
 		}
 	} else {
-		dbg_verbose("[core%d][memory] pc=%d (no memory access)\n", p_core->idx, ex_mem->npc.q);
+		dbg_verbose("[core%d][memory] pc=%d (n/a)\n", p_core->idx, ex_mem->npc.q);
 	}
 
 	mem_wb->npc.d = ex_mem->npc.q;
@@ -494,6 +548,7 @@ void core_write_back(struct core *p_core)
 	uint8_t op = INST_OP_GET(mem_wb->ir.q);
 	uint32_t val = 0;
 	uint8_t dst = 0;
+	bool write_back = false;
 
 	if (mem_wb->npc.q == INVALID_PC) {
 		dbg_verbose("[core%d][writeback]\n", p_core->idx);
@@ -503,14 +558,27 @@ void core_write_back(struct core *p_core)
 	if (op < OP_BEQ || op == OP_JAL) {
 		dst = mem_wb->dst.q & REG_MASK;
 		val = mem_wb->alu.q;
+		write_back = true;
 	} else if (op == OP_LW) {
 		dst = mem_wb->dst.q & REG_MASK;
 		val = mem_wb->md.q;
+		write_back = true;
+	} else {
+		write_back = false;
+		dbg_verbose("[core%d][writeback] pc=%d (n/a)\n", p_core->idx, mem_wb->npc.q);
 	}
 
-	reg[dst].d = val;
+	reg[0].d = reg[0].q = 0;
 
-	dbg_verbose("[core%d][writeback] pc=%d, op=%d, dst=%d, val=%08x\n", p_core->idx, mem_wb->npc.q, op, dst, val);
+	if (write_back) {
+		reg[dst].d = val;
+		dbg_verbose("[core%d][writeback] pc=%d, op=%d, dst=%d, val=%08x\n", p_core->idx,
+			    mem_wb->npc.q, op, dst, val);
+	}
+
+	if (p_core->delay_slot && mem_wb->npc.q == p_core->delay_slot_pc) {
+		p_core->delay_slot = false;
+	}
 }
 
 void core_free(struct core *p_core)

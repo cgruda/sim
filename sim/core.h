@@ -89,6 +89,8 @@ struct core {
 	int stats[STATS_MAX];
 	bool stall_decode;
 	bool stall_mem;
+	bool delay_slot;
+	uint8_t delay_slot_pc;
 	bool done;
 
 	char *trace_path;

@@ -126,6 +126,8 @@ void mem_snoop(struct mem *p_mem)
 		break;
 
 	case BUS_CMD_FLUSH:
+		mem_write(p_mem, p_bus->addr, p_bus->data);
+
 		if (bus_user_get(p_bus) == p_bus->origid) {
 			// core evicting a modified block
 			dbg_verbose("[mem][snoop][evict] orig=%x, addr=%05x, data=%08x\n", p_bus->origid,
@@ -135,7 +137,7 @@ void mem_snoop(struct mem *p_mem)
 				bus_clear(p_bus);
 			}
 		}
-		mem_write(p_mem, p_bus->addr, p_bus->data);
+
 		break;
 
 	default:

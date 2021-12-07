@@ -8,8 +8,9 @@
 #include "cache.h"
 
 #define ARGC_CNT	27
-#define MAX_ITERATIONS  300 // FIXME: for debug
-
+#define MAX_ITERATIONS  100000 // FIXME: for debug
+#define MEM_MODE	MEM_LOAD_DUMMY
+// #define MEM_MODE	MEM_LOAD_FILE
 struct sim_env {
 	char **paths;
 
@@ -50,8 +51,8 @@ int sim_init(struct sim_env *p_env, int argc, char **argv)
 {
 	int res = 0;
 	p_env->run = true;
-	p_env->dbg_max_iterations = 0;
-	p_env->mem_mode = MEM_LOAD_FILE;
+	p_env->dbg_max_iterations = MAX_ITERATIONS;
+	p_env->mem_mode = MEM_MODE;
 
 	if (!argc) {
 		p_env->paths = (char **)&default_paths;
@@ -72,7 +73,7 @@ int sim_init(struct sim_env *p_env, int argc, char **argv)
 
 	p_env->mem.dump_path = p_env->paths[PATH_MEMOUT];
 	p_env->mem.p_bus = &p_env->bus;
-	res = mem_load(p_env->paths[PATH_MEMIN], p_env->mem.data, MEM_LEN, p_env->mem_mode); // FIXME: dummy main mem // MEM_LOAD_DUMMY, MEM_LOAD_FILE
+	res = mem_load(p_env->paths[PATH_MEMIN], p_env->mem.data, MEM_LEN, p_env->mem_mode);
 	if (res < 0) {
 		sim_cleanup(p_env);
 		return -1;
@@ -148,7 +149,13 @@ void sim_run(struct sim_env *p_env)
 		    g_clk == p_env->dbg_max_iterations) {
 			break;
 		}
+
+		if (!(g_clk % 10000)) {
+			dbg_info("g_clk=%d\n", g_clk);
+		}
 	}
+
+	dbg_info("simultaion done. clk=%d\n", g_clk);
 }
 
 void sim_dump(struct sim_env *p_env)
