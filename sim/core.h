@@ -99,7 +99,7 @@ struct core {
 };
 
 struct core *core_alloc(int idx);
-int core_load(char **file_paths, struct core *p_core, uint32_t *mem, struct bus *p_bus);
+int core_load(struct core *p_core, char **file_paths, struct bus *p_bus);
 void core_free(struct core *p_core);
 void core_cycle(struct core *p_core);
 void core_clock_tick(struct core *p_core);

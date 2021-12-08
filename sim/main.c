@@ -88,7 +88,7 @@ int sim_init(struct sim_env *p_env, int argc, char **argv)
 			return -1;
 		}
 
-		res = core_load(p_env->paths, p_env->core[i], p_env->mem.data, &p_env->bus);
+		res = core_load(p_env->core[i], p_env->paths, &p_env->bus);
 		if (res < 0) {
 			sim_cleanup(p_env);
 			return -1;

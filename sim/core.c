@@ -631,7 +631,7 @@ struct core *core_alloc(int idx)
 	return p_core;
 }
 
-int core_load(char **file_paths, struct core *p_core, uint32_t *mem, struct bus *p_bus)
+int core_load(struct core *p_core, char **file_paths, struct bus *p_bus)
 {
 	int res = 0;
 
@@ -639,10 +639,9 @@ int core_load(char **file_paths, struct core *p_core, uint32_t *mem, struct bus 
 	p_core->reg_dump_path = file_paths[PATH_REGOUT0 + p_core->idx];
 	p_core->stats_dump_path = file_paths[PATH_STATS0 + p_core->idx];
 
-	// TODO: redo this
-	p_core->p_cache->p_bus = p_bus;
 	p_core->p_cache->tsram_dump_path = file_paths[PATH_TSRAM0 + p_core->idx];
 	p_core->p_cache->dsram_dump_path = file_paths[PATH_DSRAM0 + p_core->idx];
+	p_core->p_cache->p_bus = p_bus;
 	p_core->p_cache->p_core = p_core;
 
 	res = mem_load(file_paths[PATH_IMEME0 + p_core->idx], p_core->imem, IMEM_LEN, MEM_LOAD_FILE);
@@ -655,7 +654,7 @@ int core_load(char **file_paths, struct core *p_core, uint32_t *mem, struct bus 
 		p_core->pipe[i].npc.d = INVALID_PC;
 	}
 
-	dbg_info("core%d loaded\n", p_core->idx);
+	dbg_info("[core%d] load success\n", p_core->idx);
 
 	return 0;
 }
