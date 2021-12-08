@@ -15,16 +15,21 @@ enum dbg_level {
 	DBG_MAX
 };
 
+#define DBG_LEVEL_STAMP(level)	(((level) == (DBG_ERROR))   ? "ERROR" : \
+				 ((level) == (DBG_WARNING)) ? "WARN"  : \
+				 ((level) == (DBG_INFO))    ? "INFO"  : \
+				 ((level) == (DBG_VERBOSE)) ? "VERB"  : \
+				 ((level) == (DBG_TRACE))   ? "TRACE" : \
+				                              "N/A")
+
 #define dbg_stamp() printf("[%s][%d]", __func__, __LINE__)
 #define DBG_LEVEL	DBG_INFO
-
-const char *dbg_level_stamp[DBG_MAX];
 
 #define dbg(level, ...)							\
 	do {								\
 		if (level <= DBG_LEVEL) {				\
 			dbg_stamp();					\
-			printf("[%s] ", dbg_level_stamp[level]);	\
+			printf("[%s] ", DBG_LEVEL_STAMP(level));	\
 			printf(__VA_ARGS__);				\
 		}							\
 	} while (0)

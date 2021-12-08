@@ -142,7 +142,6 @@
     <ClCompile Include="bus.c" />
     <ClCompile Include="cache.c" />
     <ClCompile Include="core.c" />
-    <ClCompile Include="dbg.c" />
     <ClCompile Include="main.c" />
     <ClCompile Include="mem.c" />
     <ClCompile Include="sim.c" />
