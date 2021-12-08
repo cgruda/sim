@@ -2,12 +2,13 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include "common.h"
 #include "core.h"
 #include "cache.h"
 #include "mem.h"
 #include "bus.h"
+#include "sim.h"
 
+#define BIT(x)	(1U << (x))
 #define IS_NEGATIVE(num2c) ((num2c) & BIT(31))
 #define IS_POSITIVE(num2c) (!IS_NEGATIVE(num2c))
 
@@ -683,7 +684,7 @@ int core_trace(struct core *p_core)
 		return -1;
 	}
 
-	fprintf(fp, "%d ", g_clk);
+	fprintf(fp, "%d ", sim_clk);
 	core_trace_pipe(fp, p_core);
 	core_trace_reg(fp, p_core);
 	fprintf(fp, "\n");
@@ -894,7 +895,7 @@ bool core_is_done(struct core *p_core)
 				return false;
 		}
 
-		dbg_info("[core%d] done. clk=%d\n", p_core->idx, g_clk);
+		dbg_info("[core%d] done. clk=%d\n", p_core->idx, sim_clk);
 		p_core->done = true;
 	}
 

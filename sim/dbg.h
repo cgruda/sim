@@ -41,10 +41,4 @@ const char *dbg_level_stamp[DBG_MAX];
 		printf(". %s\n", strerror(errno));	\
 	} while (0)
 
-// // bit operations
-// #define BIT(pos) (1 << (pos))
-// #define SET_BIT(map, pos) ((map) |= BIT(pos))
-// #define CLR_BIT(map, pos) ((map) &= ~BIT(pos))
-// #define TEST_BIT(map, pos) (!!((map) & BIT(pos)))
-
 #endif

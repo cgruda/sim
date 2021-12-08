@@ -141,19 +141,19 @@
   <ItemGroup>
     <ClCompile Include="bus.c" />
     <ClCompile Include="cache.c" />
-    <ClCompile Include="common.c" />
     <ClCompile Include="core.c" />
     <ClCompile Include="dbg.c" />
     <ClCompile Include="main.c" />
     <ClCompile Include="mem.c" />
+    <ClCompile Include="sim.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bus.h" />
     <ClInclude Include="cache.h" />
-    <ClInclude Include="common.h" />
     <ClInclude Include="core.h" />
     <ClInclude Include="dbg.h" />
     <ClInclude Include="mem.h" />
+    <ClInclude Include="sim.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

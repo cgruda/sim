@@ -4,7 +4,7 @@
 #include "cache.h"
 #include "core.h"
 #include "mem.h"
-#include "common.h"
+#include "sim.h"
 
 bool bus_user_in_queue(struct bus *p_bus, uint8_t user, uint8_t *p_pos)
 {
@@ -182,7 +182,7 @@ int bus_trace(struct bus *p_bus)
 		return -1;
 	}
 
-	fprintf(fp, "%d %x %x %05x %08x %x\n", g_clk, p_bus->origid,
+	fprintf(fp, "%d %x %x %05x %08x %x\n", sim_clk, p_bus->origid,
 		    p_bus->cmd, p_bus->addr, p_bus->data, p_bus->shared);
 	
 	fclose(fp);

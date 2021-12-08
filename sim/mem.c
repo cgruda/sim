@@ -3,7 +3,6 @@
 #include "mem.h"
 #include "bus.h"
 #include "cache.h"
-#include "common.h"
 
 uint32_t *mem_alloc(int len)
 {
