@@ -238,7 +238,7 @@ void core_write(struct core *p_core, uint32_t addr, uint32_t data, bool *write_d
 
 		// invalidate other cahces that hold now modified block
 		if (cache_state_get(p_cache, idx) == MESI_SHARED) {
-			bus_read_x(p_core, addr);
+			cache_bus_read_x(p_cache, addr);
 			// FIXME: might need to stall even that write_done!!
 		}
 
@@ -252,7 +252,7 @@ void core_write(struct core *p_core, uint32_t addr, uint32_t data, bool *write_d
 		}
 
 		// TODO: how this is delayed to next rr
-		bus_read_x(p_core, addr);
+		cache_bus_read_x(p_cache, addr);
 	}
 }
 
@@ -274,7 +274,7 @@ uint32_t core_read(struct core *p_core, uint32_t addr, bool *read_done)
 		}
 
 		// TODO: how this is delayed to next rr
-		bus_read(p_core, addr);
+		cache_bus_read(p_cache, addr);
 	}
 
 	return data;

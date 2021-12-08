@@ -76,5 +76,7 @@ void cache_flush_block(struct cache *p_cache, uint8_t idx, bool shared);
 void cache_evict_block(struct cache *p_cache, uint8_t idx);
 uint16_t cache_tag_get(struct cache *p_cache, uint8_t idx);
 void cache_tag_set(struct cache *p_cache, uint8_t idx, uint16_t tag);
+void cache_bus_read(struct cache *p_cache, uint32_t addr);
+void cache_bus_read_x(struct cache *p_cache, uint32_t addr);
 
 #endif

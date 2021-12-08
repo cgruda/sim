@@ -130,45 +130,6 @@ void bus_read_x_cmd_set(struct bus *p_bus, uint8_t orig_id, uint32_t addr)
 	p_bus->rd_type = BUS_CMD_BUS_RD_X;
 }
 
-// TODO: move to cache module
-void bus_read(struct core *p_core, uint32_t addr)
-{
-	struct cache *p_cache = p_core->p_cache;
-	struct bus *p_bus = p_cache->p_bus;
-
-	if (!bus_busy(p_bus)) {
-		if (bus_user_queue_empty(p_bus)) {
-			bus_user_queue_push(p_bus, p_core->idx);
-		}
-
-		bus_read_cmd_set(p_bus, p_core->idx, addr);
-		dbg_verbose("[bus][BusRd] orig=%x addr=%05x\n", p_bus->origid, p_bus->addr);
-	} else {
-		if (!bus_user_in_queue(p_bus, p_core->idx, NULL)) {
-			bus_user_queue_push(p_bus, p_core->idx);
-		}
-	}
-}
-
-void bus_read_x(struct core *p_core, uint32_t addr)
-{
-	struct cache *p_cache = p_core->p_cache;
-	struct bus *p_bus = p_cache->p_bus;
-
-	if (!bus_busy(p_bus)) {
-		if (bus_user_queue_empty(p_bus)) {
-			bus_user_queue_push(p_bus, p_core->idx);
-		}
-
-		bus_read_x_cmd_set(p_bus, p_core->idx, addr);
-		dbg_verbose("[bus][BusRdX] orig=%x addr=%05x\n", p_bus->origid, p_bus->addr);
-	} else {
-		if (!bus_user_in_queue(p_bus, p_core->idx, NULL)) {
-			bus_user_queue_push(p_bus, p_core->idx);
-		}
-	}
-}
-
 int bus_trace(struct bus *p_bus)
 {
 	FILE *fp = NULL;

@@ -31,7 +31,6 @@ struct bus {
 	uint32_t data;
 	uint32_t shared : 1;
 
-	// control
 	bool busy;
 	uint8_t rd_type;
 	uint8_t user_queue[BUS_QUEUE_LEN];
@@ -43,15 +42,15 @@ struct bus {
 bool bus_user_in_queue(struct bus *p_bus, uint8_t user, uint8_t *p_pos);
 uint8_t bus_user_get(struct bus *p_bus);
 uint8_t bus_cmd_get(struct bus *p_bus);
-void bus_read(struct core *p_core, uint32_t addr);
-void bus_read_x(struct core *p_core, uint32_t addr);
 int bus_trace(struct bus *p_bus);
 void bus_init(struct bus *p_bus, char *path);
 void bus_clear(struct bus *p_bus);
-void bus_cmd_set(struct bus *p_bus, uint8_t orig_id, uint8_t cmd,
-	uint32_t addr, uint32_t data);
 bool bus_busy(struct bus *p_bus);
 bool bus_user_queue_empty(struct bus *p_bus);
 void bus_user_queue_push(struct bus *p_bus, uint8_t user);
+void bus_read_cmd_set(struct bus *p_bus, uint8_t orig_id, uint32_t addr);
+void bus_read_x_cmd_set(struct bus *p_bus, uint8_t orig_id, uint32_t addr);
+void bus_cmd_set(struct bus *p_bus, uint8_t orig_id, uint8_t cmd,
+	uint32_t addr, uint32_t data);
 
 #endif

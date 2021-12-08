@@ -150,3 +150,41 @@ void cache_evict_block(struct cache *p_cache, uint8_t idx)
 		}
 	}
 }
+
+void cache_bus_read(struct cache *p_cache, uint32_t addr)
+{
+	struct core *p_core = p_cache->p_core;
+	struct bus *p_bus = p_cache->p_bus;
+
+	if (!bus_busy(p_bus)) {
+		if (bus_user_queue_empty(p_bus)) {
+			bus_user_queue_push(p_bus, p_core->idx);
+		}
+
+		bus_read_cmd_set(p_bus, p_core->idx, addr);
+		dbg_verbose("[bus][BusRd] orig=%x addr=%05x\n", p_bus->origid, p_bus->addr);
+	} else {
+		if (!bus_user_in_queue(p_bus, p_core->idx, NULL)) {
+			bus_user_queue_push(p_bus, p_core->idx);
+		}
+	}
+}
+
+void cache_bus_read_x(struct cache *p_cache, uint32_t addr)
+{
+	struct core *p_core = p_cache->p_core;
+	struct bus *p_bus = p_cache->p_bus;
+
+	if (!bus_busy(p_bus)) {
+		if (bus_user_queue_empty(p_bus)) {
+			bus_user_queue_push(p_bus, p_core->idx);
+		}
+
+		bus_read_x_cmd_set(p_bus, p_core->idx, addr);
+		dbg_verbose("[bus][BusRdX] orig=%x addr=%05x\n", p_bus->origid, p_bus->addr);
+	} else {
+		if (!bus_user_in_queue(p_bus, p_core->idx, NULL)) {
+			bus_user_queue_push(p_bus, p_core->idx);
+		}
+	}
+}
