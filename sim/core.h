@@ -80,25 +80,27 @@ struct pipe {
 
 struct core {
 	int idx;
+
 	reg32_t pc;
 	reg32_t reg[REG_MAX];
 	uint32_t *imem;
 	struct cache *p_cache;
 	struct pipe pipe[PIPE_MAX];
-	bool halt;
-	int stats[STATS_MAX];
+
 	bool stall_decode;
 	bool stall_mem;
+	bool halt;
+	bool done;
 	bool delay_slot;
 	uint8_t delay_slot_pc;
-	bool done;
 
+	int stats[STATS_MAX];
 	char *trace_path;
 	char *stats_dump_path;
 	char *reg_dump_path;
 };
 
-struct core *core_alloc(int idx);
+int core_alloc(struct core *p_core, int idx);
 int core_load(struct core *p_core, char **file_paths, struct bus *p_bus);
 void core_free(struct core *p_core);
 void core_cycle(struct core *p_core);
@@ -106,5 +108,6 @@ void core_clock_tick(struct core *p_core);
 bool core_is_done(struct core *p_core);
 int core_dump(struct core *p_core);
 void core_snoop1(struct core *p_core);
+void core_snoop2(struct core *p_core);
 
 #endif

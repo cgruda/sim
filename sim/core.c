@@ -583,11 +583,6 @@ void core_write_back(struct core *p_core)
 
 void core_free(struct core *p_core)
 {
-	if (!p_core) {
-		dbg_warning("invalid core\n");
-		return;
-	}
-
 	if (p_core->p_cache) {
 		cache_free(p_core->p_cache);
 	}
@@ -597,38 +592,25 @@ void core_free(struct core *p_core)
 	}
 }
 
-struct core *core_alloc(int idx)
+int core_alloc(struct core *p_core, int idx)
 {
-	struct core *p_core = NULL;
+	memset(p_core, 0, sizeof(*p_core));
 
-	if (idx >= CORE_MAX) {
-		dbg_error("invalid core_idx=%d, max cores allowed is %d\n", idx, CORE_MAX);
-		return NULL;
-	}
-
-	p_core = calloc(1, sizeof(*p_core));
-	if (!p_core) {
-		print_error("Failed to allocate core");
-		return NULL;
-	}
+	p_core->idx = idx;
 
 	p_core->p_cache = cache_alloc();
 	if (!p_core->p_cache) {
 		dbg_error("Failed to allocate core cache\n");
-		core_free(p_core);
-		return NULL;
+		return -1;
 	}
 
 	p_core->imem = mem_alloc(IMEM_LEN);
 	if (!p_core->imem) {
 		dbg_error("Failed to allocate core imem\n");
-		core_free(p_core);
-		return NULL;
+		return -1;
 	}
 
-	p_core->idx = idx;
-
-	return p_core;
+	return 0;
 }
 
 int core_load(struct core *p_core, char **file_paths, struct bus *p_bus)
@@ -860,7 +842,6 @@ void core_snoop2(struct core *p_core)
 
 void core_cycle(struct core *p_core)
 {
-	core_snoop2(p_core);
 	core_fetch_instruction(p_core);
 	core_decode_instruction(p_core);
 	core_execute_instruction(p_core);
@@ -901,18 +882,13 @@ void core_clock_tick(struct core *p_core)
 	p_core->pc.q = p_core->pc.d;
 }
 
-bool core_is_halt(struct core *p_core)
-{
-	return p_core->halt;
-}
-
 bool core_is_done(struct core *p_core)
 {
 	if (p_core->done) {
 		return true;
 	}
 
-	if (core_is_halt(p_core)) {
+	if (p_core->halt) {
 		for (int i = 0; i < PIPE_MAX; i++) {
 			if (p_core->pipe[i].npc.q != INVALID_PC)
 				return false;
@@ -965,6 +941,9 @@ int core_dump(struct core *p_core)
 
 	res |= core_regs_dump(p_core);
 	res |= core_stats_dump(p_core);
+	res |= cache_dump(p_core->p_cache);
+
+	dbg_info("[core%d] dump done\n", p_core->idx);
 
 	return res;
 }

@@ -70,8 +70,11 @@ int mem_dump(struct mem *p_mem)
 		return -1;
 	}
 
-	for (int i = 0; i < MEM_LEN; i++)
+	for (int i = 0; i < MEM_LEN; i++) {
 		fprintf(fp, "%08x\n", p_mem->data[i]);
+	}
+
+	dbg_info("[mem] dump done\n");
 
 	fclose(fp);
 	return 0;
