@@ -213,11 +213,11 @@ void write_instruction_to_imem(uint32_t *imem, uint16_t *pc, char *p1, char *p2,
 		im = str_to_dec(p5);
 	}
 
-	inst |= op << INST_OP_OFT;
-	inst |= rd << INST_RD_OFT;
-	inst |= rs << INST_RS_OFT;
-	inst |= rt << INST_RT_OFT;
-	inst |= im << INST_IM_OFT;
+	inst |= (op << INST_OP_OFT) & INST_OP_MSK;
+	inst |= (rd << INST_RD_OFT) & INST_RD_MSK;
+	inst |= (rs << INST_RS_OFT) & INST_RS_MSK;
+	inst |= (rt << INST_RT_OFT) & INST_RT_MSK;
+	inst |= (im << INST_IM_OFT) & INST_IM_MSK;
 
 	imem[*pc] = inst;
 	++*pc;
