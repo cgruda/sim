@@ -10,7 +10,7 @@
 
 #define BIT(x)	(1U << (x))
 #define IS_NEGATIVE(num2c) ((num2c) & BIT(31))
-#define IS_POSITIVE(num2c) (!IS_NEGATIVE(num2c))
+#define SAME_SIGN(a, b)	!(((a) ^ (b)) & BIT(31))
 
 #define PC_MASK		0x000003FF
 #define INVALID_PC	0xFFFFFFFF
@@ -99,39 +99,35 @@ void core_branch_resolution(struct core *p_core, uint8_t op, uint32_t rtv, uint3
 		break;
 
 	case OP_BLT:
-		if (IS_NEGATIVE(rsv) && IS_NEGATIVE(rtv))
-			branch = rsv > rtv;
-		else if (IS_POSITIVE(rsv) && IS_POSITIVE(rtv))
+		if (SAME_SIGN(rsv, rtv)) {
 			branch = rsv < rtv;
-		else if (IS_NEGATIVE(rsv) && IS_POSITIVE(rtv))
-			branch = true;
+		} else {
+			branch = rsv > rtv;
+		}
 		break;
 
 	case OP_BGT:
-		if (IS_NEGATIVE(rsv) && IS_NEGATIVE(rtv))
-			branch = rsv < rtv;
-		else if (IS_POSITIVE(rsv) && IS_POSITIVE(rtv))
+		if (SAME_SIGN(rsv, rtv)) {
 			branch = rsv > rtv;
-		else if (IS_POSITIVE(rsv) && IS_NEGATIVE(rtv))
-			branch = true;
+		} else {
+			branch = rsv < rtv;
+		}
 		break;
 
 	case OP_BLE:
-		if (IS_NEGATIVE(rsv) && IS_NEGATIVE(rtv))
-			branch = rsv >= rtv;
-		else if (IS_POSITIVE(rsv) && IS_POSITIVE(rtv))
+		if (SAME_SIGN(rsv, rtv)) {
 			branch = rsv <= rtv;
-		else if (IS_NEGATIVE(rsv) && IS_POSITIVE(rtv))
-			branch = true;
+		} else {
+			branch = rsv >= rtv;
+		}
 		break;
 
 	case OP_BGE:
-		if (IS_NEGATIVE(rsv) && IS_NEGATIVE(rtv))
-			branch = rsv <= rtv;
-		else if (IS_POSITIVE(rsv) && IS_POSITIVE(rtv))
+		if (SAME_SIGN(rsv, rtv)) {
 			branch = rsv >= rtv;
-		else if (IS_POSITIVE(rsv) && IS_NEGATIVE(rtv))
-			branch = true;
+		} else {
+			branch = rsv <= rtv;
+		}
 		break;
 
 	case OP_JAL:
