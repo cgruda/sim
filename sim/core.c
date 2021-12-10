@@ -35,7 +35,7 @@
 
 char *core_stat_name_2_str[STATS_MAX] = {
 	[STATS_CYCLE]        = "cycles",
-	[STATS_INSTRUCTION]  = "instructions",
+	[STATS_EXECUTE]      = "instructions",
 	[STATS_READ_HIT]     = "read_hit",
 	[STATS_WRITE_HIT]    = "write_hit",
 	[STATS_READ_MISS]    = "read_miss",
@@ -67,6 +67,11 @@ char *core_op_2_str[OP_MAX] = {
 	[OP_RSV2] = "N/A",
 	[OP_HALT] = "N/A",
 };
+
+void core_stats_inc(struct core *p_core, uint8_t stat)
+{
+	p_core->stats[stat]++;
+}
 
 bool core_is_op_branch(uint8_t op)
 {
@@ -385,6 +390,8 @@ void core_execute_instruction(struct core *p_core)
 		sign_extention_mask = ~(BIT(31 - rtv) - 1);
 	}
 
+	core_stats_inc(p_core, STATS_EXECUTE);
+
 	switch (op) {
 	case OP_ADD:
 		alu = rsv + rtv;
@@ -689,11 +696,6 @@ int core_trace(struct core *p_core)
 	return 0;
 }
 
-void core_stats_inc(struct core *p_core, uint8_t stat)
-{
-	p_core->stats[stat]++;
-}
-
 void core_snoop1_bus_rd_x(struct core *p_core)
 {
 	struct cache *p_cache = p_core->p_cache;
@@ -845,6 +847,7 @@ void core_cycle(struct core *p_core)
 	core_memory_access(p_core);
 	core_write_back(p_core);
 	core_trace(p_core);
+	core_stats_inc(p_core, STATS_CYCLE);
 }
 
 void core_clock_tick(struct core *p_core)

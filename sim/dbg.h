@@ -23,7 +23,7 @@ enum dbg_level {
 				                              "N/A")
 
 #define dbg_stamp() printf("[%s][%d]", __func__, __LINE__)
-#define DBG_LEVEL	DBG_MAX
+#define DBG_LEVEL	DBG_INFO
 
 #define dbg(level, ...)							\
 	do {								\

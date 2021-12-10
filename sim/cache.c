@@ -65,11 +65,6 @@ bool cache_hit(struct cache *p_cache, uint32_t addr)
 	return (block_tag == addr_tag) && (block_state != MESI_INVALID);
 }
 
-bool cache_last_addr_in_block(uint32_t addr)
-{
-	return (ADDR_OFT_GET(addr) == ADDR_OFT_MSK);
-}
-
 void cache_write(struct cache *p_cache, uint32_t addr, uint32_t data)
 {
 	struct dsram *p_dsram = &p_cache->dsram;
