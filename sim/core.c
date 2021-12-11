@@ -73,6 +73,11 @@ void core_stats_inc(struct core *p_core, uint8_t stat)
 	p_core->stats[stat]++;
 }
 
+void core_stats_dec(struct core *p_core, uint8_t stat)
+{
+	p_core->stats[stat]--;
+}
+
 bool core_is_op_branch(uint8_t op)
 {
 	return ((op >= OP_BEQ) && (op <= OP_JAL));
@@ -245,6 +250,7 @@ void core_write(struct core *p_core, uint32_t addr, uint32_t data, bool *write_d
 		*write_done = true;
 		cache_write(p_cache, addr, data);
 		cache_state_set(p_cache, idx, MESI_MODIFIED);
+		core_stats_inc(p_core, STATS_WRITE_HIT);
 	} else {
 		*write_done = false;
 		
@@ -253,6 +259,9 @@ void core_write(struct core *p_core, uint32_t addr, uint32_t data, bool *write_d
 			return;
 		}
 
+		// dec "hit" since when data arrives "hit" is inc
+		core_stats_dec(p_core, STATS_WRITE_HIT);
+		core_stats_inc(p_core, STATS_WRITE_MISS);
 		cache_bus_read_x(p_cache, addr);
 	}
 }
@@ -266,6 +275,7 @@ uint32_t core_read(struct core *p_core, uint32_t addr, bool *read_done)
 	if (cache_hit(p_cache, addr)) {
 		*read_done = true;
 		data = cache_read(p_cache, addr);
+		core_stats_inc(p_core, STATS_READ_HIT);
 	} else {
 		*read_done = false;
 
@@ -274,6 +284,9 @@ uint32_t core_read(struct core *p_core, uint32_t addr, bool *read_done)
 			return 0;
 		}
 
+		// dec "hit" since when data arrives "hit" is inc
+		core_stats_dec(p_core, STATS_READ_HIT);
+		core_stats_inc(p_core, STATS_READ_MISS);
 		cache_bus_read(p_cache, addr);
 	}
 
@@ -488,6 +501,8 @@ bool core_memory_stall_handle(struct core *p_core)
 	uint8_t id = p_core->idx;
 	uint8_t mem_ret = false;
 
+	core_stats_inc(p_core, STATS_MEM_STALL);
+
 	if (!bus_user_in_queue(p_bus, id, NULL)) {
 		if (cache_hit(p_cache, addr)) {
 			p_core->stall_mem = false;
@@ -595,7 +610,7 @@ void core_write_back(struct core *p_core)
 	reg[0].d = reg[0].q = 0;
 
 	if (write_back) {
-		reg[dst].d = val;
+		reg[dst & REG_MASK].d = val;
 		dbg_verbose("[core%d][writeback] pc=%d, op=%d, dst=%d, val=%08x\n", p_core->idx,
 			    npc, op, dst, val);
 	}
@@ -672,7 +687,7 @@ void core_trace_pipe(FILE *fp, struct core *p_core)
 	pc = p_core->pipe[IF_ID].npc.d;
 
 	if (pc != INVALID_PC) {
-		fprintf(fp, "%03d ", pc);
+		fprintf(fp, "%03X ", pc);
 	} else {
 		fprintf(fp, "--- ");
 	}
@@ -682,7 +697,7 @@ void core_trace_pipe(FILE *fp, struct core *p_core)
 		pc = p_core->pipe[i - 1].npc.q;
 
 		if (pc != INVALID_PC) {
-			fprintf(fp, "%03d ", pc);
+			fprintf(fp, "%03X ", pc);
 		} else {
 			fprintf(fp, "--- ");
 		}
@@ -930,7 +945,7 @@ int core_regs_dump(struct core *p_core)
 	}
 
 	for (int i = 2; i < REG_MAX; i++) {
-		fprintf(fp, "%08x\n", p_core->reg[i].q);
+		fprintf(fp, "%08X\n", p_core->reg[i].q);
 	}
 
 	fclose(fp);

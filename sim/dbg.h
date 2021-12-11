@@ -15,15 +15,13 @@ enum dbg_level {
 	DBG_MAX
 };
 
-enum dbg_output {
-	DBG_STDOUT,
-	DBG_DUMP_TXT,
-};
+#define DBG_STDOUT	0
+#define DBG_DUMP_TXT	1
 
-#define DBG_OUTPUT	DBG_DUMP_TXT
-#define DBG_LEVEL	DBG_MAX
+#define DBG_OUTPUT	DBG_STDOUT
+#define DBG_LEVEL	DBG_INFO
 
-#if ((DBG_OUTPUT) == DBG_DUMP_TXT)
+#if (DBG_OUTPUT == DBG_DUMP_TXT)
 	extern FILE *dbgfp;
 	#define dbgpath "dbgdump.txt"
 	#define dbg_fp_declare() FILE *dbgfp = NULL;

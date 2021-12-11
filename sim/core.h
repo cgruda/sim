@@ -14,7 +14,7 @@ enum core_id {
 	CORE_1,
 	CORE_2,
 	CORE_3,
-	CORE_MAX = 2
+	CORE_MAX
 };
 
 enum op {

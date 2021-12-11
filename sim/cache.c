@@ -93,7 +93,7 @@ int cache_dump(struct cache *p_cache)
 	}
 
 	for (int i = 0; i < DSRAM_LEN; i++)
-		fprintf(fp, "%08x\n", p_cache->dsram.mem[i]);
+		fprintf(fp, "%08X\n", p_cache->dsram.mem[i]);
 
 	fclose(fp);
 
@@ -103,7 +103,7 @@ int cache_dump(struct cache *p_cache)
 	}
 
 	for (int i = 0; i < BLOCK_CNT; i++)
-		fprintf(fp, "%08x\n", p_cache->tsram.mem[i]);
+		fprintf(fp, "%08X\n", p_cache->tsram.mem[i]);
 
 	fclose(fp);
 	return 0;

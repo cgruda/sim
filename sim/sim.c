@@ -9,8 +9,8 @@
 
 #define ARGC_CNT	27
 #define MAX_ITERATIONS  10000 // FIXME: for debug
-#define MAIN_MEM_MODE	MEM_LOAD_DUMMY
-// #define MAIN_MEM_MODE	MEM_LOAD_FILE
+// #define MAIN_MEM_MODE	MEM_LOAD_DUMMY
+#define MAIN_MEM_MODE	MEM_LOAD_FILE
 
 int sim_clk = 0;
 
