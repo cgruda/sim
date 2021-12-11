@@ -104,9 +104,9 @@ void mem_flush_block(struct mem *p_mem, uint32_t addr)
 	uint32_t flush_data = mem_read(p_mem, flush_addr);
 
 	bus_cmd_set(p_bus, ORIGID_MAIN_MEM, BUS_CMD_FLUSH, flush_addr, flush_data);
-	dbg_verbose("[mem][flush] addr=%05x, data=%08x\n", flush_addr, flush_data);
-	// FIXME:NOTE: i dont set bus_shared!!
 	p_bus->flush_cnt++;
+
+	dbg_verbose("[mem][flush] addr=%05x, data=%08x\n", flush_addr, flush_data);
 }
 
 void mem_snoop(struct mem *p_mem)
@@ -132,11 +132,12 @@ void mem_snoop(struct mem *p_mem)
 
 		if (bus_user_get(p_bus) == p_bus->origid) {
 			// core evicting a modified block
-			dbg_verbose("[mem][snoop][evict] orig=%x, addr=%05x, data=%08x\n", p_bus->origid,
-				p_bus->addr, p_bus->data);
+			dbg_verbose("[mem][snoop][evict] orig=%x, addr=%05x, data=%08x, clear_bus=%d\n", p_bus->origid,
+				p_bus->addr, p_bus->data, p_bus->flush_cnt == BLOCK_LEN);
 
 			if (p_bus->flush_cnt == BLOCK_LEN) {
 				bus_clear(p_bus);
+				bus_user_queue_pop(p_bus);
 			}
 		}
 

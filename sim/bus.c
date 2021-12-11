@@ -26,6 +26,11 @@ uint8_t bus_user_get(struct bus *p_bus)
 	return p_bus->user_queue[0];
 }
 
+void bus_user_set(struct bus *p_bus, uint8_t user)
+{
+	p_bus->user_queue[0] = user;
+}
+
 void bus_user_queue_push(struct bus *p_bus, uint8_t user)
 {
 	uint8_t pos;
@@ -41,6 +46,10 @@ void bus_user_queue_push(struct bus *p_bus, uint8_t user)
 			break;
 		}
 	}
+
+	// FIXME: temp
+	dbg_verbose("[bus] user_queue=[(t)%d,%d,%d,%d(h)]\n", p_bus->user_queue[3],
+		    p_bus->user_queue[2], p_bus->user_queue[1], p_bus->user_queue[0]);
 }
 
 void bus_user_queue_pop(struct bus *p_bus)
@@ -50,6 +59,10 @@ void bus_user_queue_pop(struct bus *p_bus)
 	}
 
 	p_bus->user_queue[BUS_QUEUE_LEN - 1] = ORIGID_INVALID;
+
+	// FIXME: temp
+	dbg_verbose("[bus] user_queue=[(t)%d,%d,%d,%d(h)]\n", p_bus->user_queue[3],
+		    p_bus->user_queue[2], p_bus->user_queue[1], p_bus->user_queue[0]);
 }
 
 void bus_user_queue_reset(struct bus *p_bus)
@@ -102,7 +115,6 @@ void bus_init(struct bus *p_bus, char *path)
 	p_bus->flush_cnt = 0;
 	p_bus->trace_path = path;
 	p_bus->flusher = ORIGID_MAX;
-	p_bus->rd_type = BUS_CMD_NONE;
 	bus_user_queue_reset(p_bus);
 }
 
@@ -115,7 +127,6 @@ void bus_read_cmd_set(struct bus *p_bus, uint8_t orig_id, uint32_t addr)
 	bus_cmd_set(p_bus, orig_id, BUS_CMD_BUS_RD, addr, 0);
 	p_bus->shared = false; // FIXME: relevant?
 	p_bus->busy = true;
-	p_bus->rd_type = BUS_CMD_BUS_RD;
 }
 
 void bus_read_x_cmd_set(struct bus *p_bus, uint8_t orig_id, uint32_t addr)
@@ -127,7 +138,6 @@ void bus_read_x_cmd_set(struct bus *p_bus, uint8_t orig_id, uint32_t addr)
 	bus_cmd_set(p_bus, orig_id, BUS_CMD_BUS_RD_X, addr, 0);
 	p_bus->shared = false;
 	p_bus->busy = true;
-	p_bus->rd_type = BUS_CMD_BUS_RD_X;
 }
 
 int bus_trace(struct bus *p_bus)
@@ -156,7 +166,5 @@ void bus_clear(struct bus *p_bus)
 	p_bus->shared = false;
 	p_bus->busy = false;
 	p_bus->flush_cnt = 0;
-	p_bus->rd_type = BUS_CMD_NONE;
 	p_bus->flusher = ORIGID_MAX;
-	bus_user_queue_pop(p_bus);
 }

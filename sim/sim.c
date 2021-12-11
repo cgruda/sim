@@ -8,7 +8,7 @@
 #include "cache.h"
 
 #define ARGC_CNT	27
-#define MAX_ITERATIONS  1000 // FIXME: for debug
+#define MAX_ITERATIONS  10000 // FIXME: for debug
 #define MAIN_MEM_MODE	MEM_LOAD_DUMMY
 // #define MAIN_MEM_MODE	MEM_LOAD_FILE
 
@@ -148,17 +148,35 @@ void sim_core_cycle(struct sim_env *p_env)
 		if (!core_is_done(&p_env->core[i])) {
 			core_cycle(&p_env->core[i]);
 			p_env->run = true;
+
+			if (i < CORE_MAX - 1) {
+				dbg_verbose("---------------\n");
+			}
 		}
+	}
+}
+
+void sim_bus_cycle(struct sim_env *p_env)
+{
+	struct bus *p_bus = &p_env->bus;
+
+	bus_trace(&p_env->bus);
+
+	if (bus_cmd_get(p_bus) == BUS_CMD_FLUSH &&
+	    bus_user_get(p_bus) != p_bus->origid &&
+	    p_bus->flush_cnt == BLOCK_LEN) {
+		bus_clear(p_bus);
+		bus_user_queue_pop(p_bus);
 	}
 }
 
 void sim_run(struct sim_env *p_env)
 {
 	while (p_env->run) {
-		dbg_verbose("[ %d ]: ----------------------\n", sim_clk);
+		dbg_verbose("[ %d ]: ----------------------------------------------\n", sim_clk);
 		sim_snoop(p_env);
 		sim_core_cycle(p_env);
-		bus_trace(&p_env->bus); // FIXME: consider moving to start of loop - clock -1 issue
+		sim_bus_cycle(p_env);
 		sim_clock_tick(p_env);
 
 		if (sim_clk == MAX_ITERATIONS) {

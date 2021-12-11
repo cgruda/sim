@@ -121,6 +121,7 @@ void cache_flush_block(struct cache *p_cache, uint8_t idx, bool shared)
 	p_bus->flusher = p_cache->p_core->idx;
 	bus_cmd_set(p_bus, p_cache->p_core->idx, BUS_CMD_FLUSH, flush_addr, flush_data);
 	p_bus->shared = shared;
+	p_bus->busy = true;
 	p_bus->flush_cnt++;
 }
 
@@ -130,7 +131,7 @@ void cache_evict_block(struct cache *p_cache, uint8_t idx)
 	struct core *p_core = p_cache->p_core;
 
 	if (!bus_busy(p_bus)) {
-		if (bus_user_queue_empty(p_bus)) {
+		if (!bus_user_in_queue(p_bus, p_core->idx, NULL)) {
 			bus_user_queue_push(p_bus, p_core->idx);
 		}
 
@@ -140,8 +141,6 @@ void cache_evict_block(struct cache *p_cache, uint8_t idx)
 	} else {
 		if (!bus_user_in_queue(p_bus, p_core->idx, NULL)) {
 			bus_user_queue_push(p_bus, p_core->idx);
-		} else {
-			dbg_warning("[cache%d] somthing is wrong\n", p_core->idx);
 		}
 	}
 }
@@ -152,7 +151,7 @@ void cache_bus_read(struct cache *p_cache, uint32_t addr)
 	struct bus *p_bus = p_cache->p_bus;
 
 	if (!bus_busy(p_bus)) {
-		if (bus_user_queue_empty(p_bus)) {
+		if (!bus_user_in_queue(p_bus, p_core->idx, NULL)) {
 			bus_user_queue_push(p_bus, p_core->idx);
 		}
 
@@ -171,7 +170,7 @@ void cache_bus_read_x(struct cache *p_cache, uint32_t addr)
 	struct bus *p_bus = p_cache->p_bus;
 
 	if (!bus_busy(p_bus)) {
-		if (bus_user_queue_empty(p_bus)) {
+		if (!bus_user_in_queue(p_bus, p_core->idx, NULL)) {
 			bus_user_queue_push(p_bus, p_core->idx);
 		}
 

@@ -32,7 +32,6 @@ struct bus {
 	uint32_t shared : 1;
 
 	bool busy;
-	uint8_t rd_type;
 	uint8_t user_queue[BUS_QUEUE_LEN];
 	uint8_t flusher;
 	uint8_t flush_cnt;
@@ -40,7 +39,9 @@ struct bus {
 };
 
 bool bus_user_in_queue(struct bus *p_bus, uint8_t user, uint8_t *p_pos);
+void bus_user_queue_pop(struct bus *p_bus);
 uint8_t bus_user_get(struct bus *p_bus);
+void bus_user_set(struct bus *p_bus, uint8_t user);
 uint8_t bus_cmd_get(struct bus *p_bus);
 int bus_trace(struct bus *p_bus);
 void bus_init(struct bus *p_bus, char *path);
