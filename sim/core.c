@@ -743,7 +743,7 @@ void core_snoop1_bus_rd_x(struct core *p_core)
 
 	if (cache_hit(p_cache, p_bus->addr)) {
 		if (cache_state_get(p_cache, idx) == MESI_MODIFIED) {
-			cache_flush_block(p_cache, idx, true);
+			cache_flush_block(p_cache, idx, false);
 		}
 
 		cache_state_set(p_cache, idx, MESI_INVALID);
@@ -780,7 +780,7 @@ void core_snoop1_bus_flush(struct core *p_core)
 	}
 
 	if (p_bus->flusher == p_core->idx) {
-		cache_flush_block(p_cache, idx, true);
+		cache_flush_block(p_cache, idx, p_bus->shared);
 	}
 }
 
