@@ -1,7 +1,11 @@
+#include "dbg.h"
 #include "sim.h"
+
+dbg_fp_declare()
 
 int main(int argc, char **argv)
 {
+	dbg_fp_open();
 	struct sim_env env = {0};
 	int res;
 
@@ -13,6 +17,6 @@ int main(int argc, char **argv)
 	sim_run(&env);
 	sim_dump(&env);
 	sim_cleanup(&env);
-
+	dbg_fp_close();
 	return 0;
 }

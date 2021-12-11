@@ -15,6 +15,27 @@ enum dbg_level {
 	DBG_MAX
 };
 
+enum dbg_output {
+	DBG_STDOUT,
+	DBG_DUMP_TXT,
+};
+
+#define DBG_OUTPUT	DBG_DUMP_TXT
+#define DBG_LEVEL	DBG_MAX
+
+#if ((DBG_OUTPUT) == DBG_DUMP_TXT)
+	extern FILE *dbgfp;
+	#define dbgpath "dbgdump.txt"
+	#define dbg_fp_declare() FILE *dbgfp = NULL;
+	#define dbg_fp_open() do { dbgfp = fopen(dbgpath, "w"); } while(0)
+	#define dbg_fp_close() do { fclose(dbgfp); } while(0)
+#else
+	#define dbgfp stdout
+	#define dbg_fp_declare()
+	#define dbg_fp_open()
+	#define dbg_fp_close()
+#endif
+
 #define DBG_LEVEL_STAMP(level)	(((level) == (DBG_ERROR))   ? "ERROR" : \
 				 ((level) == (DBG_WARNING)) ? "WARN"  : \
 				 ((level) == (DBG_INFO))    ? "INFO"  : \
@@ -22,16 +43,15 @@ enum dbg_level {
 				 ((level) == (DBG_TRACE))   ? "TRACE" : \
 				                              "N/A")
 
-#define dbg_stamp() printf("[%s][%d]", __func__, __LINE__)
-#define DBG_LEVEL	DBG_INFO
+#define dbg_stamp() fprintf(dbgfp, "[%s][%d]", __func__, __LINE__)
 
-#define dbg(level, ...)							\
-	do {								\
-		if (level <= DBG_LEVEL) {				\
-			dbg_stamp();					\
-			printf("[%s] ", DBG_LEVEL_STAMP(level));	\
-			printf(__VA_ARGS__);				\
-		}							\
+#define dbg(level, ...)								\
+	do {									\
+		if (level <= DBG_LEVEL) {					\
+			dbg_stamp();						\
+			fprintf(dbgfp, "[%s] ", DBG_LEVEL_STAMP(level));	\
+			fprintf(dbgfp, __VA_ARGS__);				\
+		}								\
 	} while (0)
 
 #define dbg_error(...)   dbg(DBG_ERROR, __VA_ARGS__)
@@ -40,10 +60,10 @@ enum dbg_level {
 #define dbg_verbose(...) dbg(DBG_VERBOSE, __VA_ARGS__)
 #define dbg_trace(...)   dbg(DBG_TRACE, "%s\n", __func__)
 
-#define print_error(...) 				\
-	do {						\
-		dbg_error(__VA_ARGS__);			\
-		printf(". %s\n", strerror(errno));	\
+#define print_error(...) 					\
+	do {							\
+		dbg_error(__VA_ARGS__);				\
+		fprintf(dbgfp, ". %s\n", strerror(errno));	\
 	} while (0)
 
 #endif
