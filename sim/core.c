@@ -560,7 +560,7 @@ void core_memory_access(struct core *p_core)
 			break;
 		}
 
-		dbg_verbose("[core%d][memory] pc=%d, %c, addr=%08x, data=%08x [%s]\n",
+		dbg_verbose("[core%d][memory] pc=%d, %c, addr=%05x, data=%08x [%s]\n",
 			    p_core->idx, npc, (op == OP_LW) ? 'R' : 'W', addr, data,
 			    rw_done ? "hit" : "miss");
 
