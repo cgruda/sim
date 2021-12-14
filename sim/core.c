@@ -85,7 +85,9 @@ bool core_is_op_branch(uint8_t op)
 
 void core_branch_resolution(struct core *p_core, uint8_t op, uint32_t rtv, uint32_t rsv, uint32_t rdv)
 {
+	struct pipe *if_id = &p_core->pipe[IF_ID];
 	struct pipe *id_ex = &p_core->pipe[ID_EX];
+	uint32_t npc = if_id->npc.q;
 	reg32_t *reg = p_core->reg;
 	bool branch = false;
 	
@@ -94,8 +96,8 @@ void core_branch_resolution(struct core *p_core, uint8_t op, uint32_t rtv, uint3
 		return;
 	}
 
-	if (p_core->delay_slot) {
-		dbg_warning("[core%d] control hazard! op=%d ignored\n", p_core->idx, op);
+	if (p_core->delay_slot && npc == p_core->delay_slot_pc) {
+		dbg_warning("[core%d] control hazard! pc=0x%0X ignored\n", p_core->idx, npc);
 		return;
 	}
 
@@ -147,7 +149,7 @@ void core_branch_resolution(struct core *p_core, uint8_t op, uint32_t rtv, uint3
 		break;
 
 	default:
-		dbg_warning("[core%d] invalid op! pc=%d, op=%d", p_core->idx, p_core->pc.q, op);
+		dbg_warning("[core%d] invalid op! pc=0x%X, op=%d", p_core->idx, p_core->pc.q, op);
 		branch = false;
 		break;
 	}
@@ -160,7 +162,7 @@ void core_branch_resolution(struct core *p_core, uint8_t op, uint32_t rtv, uint3
 		p_core->pc.d = p_core->pc.q + 1;
 	}
 
-	dbg_verbose("[core%d][decode] branch=%s (will fetch pc %d), (0x%08x %s 0x%08x)\n",
+	dbg_verbose("[core%d][decode] branch=%s (will fetch pc 0x%X), (0x%08x %s 0x%08x)\n",
 		    p_core->idx, branch ? "Yes" : "No", p_core->pc.d, rsv, core_op_2_str[op],
 		    rtv);
 }
@@ -312,7 +314,7 @@ void core_fetch_instruction(struct core *p_core)
 	if_id->ir.d = imem[pc & PC_MASK];
 	if_id->npc.d = pc;
 
-	dbg_verbose("[core%d][fetch] pc=%d\n", p_core->idx, pc);
+	dbg_verbose("[core%d][fetch] pc=0x%X\n", p_core->idx, pc);
 }
 
 void core_decode_instruction(struct core *p_core)
@@ -348,7 +350,7 @@ void core_decode_instruction(struct core *p_core)
 	}
 
 	if (core_hazard_raw(p_core, inst, &raw_info)) {
-		dbg_verbose("[core%d][decode] RAW Hazard! pc=%d, inst=%08x, raw_info=%04x\n",
+		dbg_verbose("[core%d][decode] RAW Hazard! pc=0x%X, inst=%08x, raw_info=%04x\n",
 			    p_core->idx, npc, inst, raw_info);
 		core_stall(p_core, ID_EX);
 		return;
@@ -364,7 +366,7 @@ void core_decode_instruction(struct core *p_core)
 	p_core->reg[1].d = im | sign_extention_mask;
 	p_core->reg[1].q = p_core->reg[1].d;
 
-	dbg_verbose("[core%d][decode] pc=%d, inst=%08x, imm=%08x\n", p_core->idx,
+	dbg_verbose("[core%d][decode] pc=0x%X, inst=%08x, imm=%08x\n", p_core->idx,
 		    npc, inst, p_core->reg[1].d);
 
 	id_ex->npc.d = npc;
@@ -476,12 +478,12 @@ void core_execute_instruction(struct core *p_core)
 		break;
 
 	default:
-		dbg_warning("[core%d][execute] pc=%d, invalid op=%d\n", p_core->idx,
+		dbg_warning("[core%d][execute] pc=0x%X, invalid op=%d\n", p_core->idx,
 			    npc, op);
 		break;
 	}
 
-	dbg_verbose("[core%d][execute] pc=%d, op=%x, rsv=0x%x, rtv=0x%x, ,alu=0x%x\n",
+	dbg_verbose("[core%d][execute] pc=0x%X, op=%x, rsv=0x%x, rtv=0x%x, ,alu=0x%x\n",
 		    p_core->idx, npc, op, rsv, rtv, alu);
 
 	ex_mem->alu.d = alu;
@@ -513,10 +515,10 @@ bool core_memory_stall_handle(struct core *p_core)
 		}
 	} else {
 		if (bus_user_get(p_bus) != id || bus_busy(p_bus)) {
-			dbg_verbose("[core%d][memory] pc=%d, stall\n", id, npc);
+			dbg_verbose("[core%d][memory] pc=0x%X, stall\n", id, npc);
 			mem_ret = true;
 		} else {
-			dbg_verbose("[core%d][memory] pc=%d, now i get the bus!, bus_user=%d, bus_busy=%d\n", id, npc, bus_user_get(p_bus), bus_busy(p_bus));
+			dbg_verbose("[core%d][memory] pc=0x%X, now i get the bus!, bus_user=%d, bus_busy=%d\n", id, npc, bus_user_get(p_bus), bus_busy(p_bus));
 		}
 	}
 
@@ -560,7 +562,7 @@ void core_memory_access(struct core *p_core)
 			break;
 		}
 
-		dbg_verbose("[core%d][memory] pc=%d, %c, addr=%05x, data=%08x [%s]\n",
+		dbg_verbose("[core%d][memory] pc=0x%X, %c, addr=%05x, data=%08x [%s]\n",
 			    p_core->idx, npc, (op == OP_LW) ? 'R' : 'W', addr, data,
 			    rw_done ? "hit" : "miss");
 
@@ -569,7 +571,7 @@ void core_memory_access(struct core *p_core)
 			return;
 		}
 	} else {
-		dbg_verbose("[core%d][memory] pc=%d (n/a)\n", p_core->idx, npc);
+		dbg_verbose("[core%d][memory] pc=0x%X (n/a)\n", p_core->idx, npc);
 	}
 
 	mem_wb->npc.d = npc;
@@ -604,14 +606,14 @@ void core_write_back(struct core *p_core)
 		write_back = true;
 	} else {
 		write_back = false;
-		dbg_verbose("[core%d][writeback] pc=%d (n/a)\n", p_core->idx, npc);
+		dbg_verbose("[core%d][writeback] pc=0x%X (n/a)\n", p_core->idx, npc);
 	}
 
 	reg[0].d = reg[0].q = 0;
 
 	if (write_back) {
 		reg[dst & REG_MASK].d = val;
-		dbg_verbose("[core%d][writeback] pc=%d, op=%d, dst=%d, val=%08x\n", p_core->idx,
+		dbg_verbose("[core%d][writeback] pc=0x%X, op=%d, dst=%d, val=%08x\n", p_core->idx,
 			    npc, op, dst, val);
 	}
 

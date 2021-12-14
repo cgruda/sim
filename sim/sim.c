@@ -8,7 +8,7 @@
 #include "cache.h"
 
 #define ARGC_CNT	27
-#define MAX_ITERATIONS  150000 // FIXME: for debug
+#define MAX_ITERATIONS  0 // FIXME: for debug
 // #define MAIN_MEM_MODE	MEM_LOAD_DUMMY
 #define MAIN_MEM_MODE	MEM_LOAD_FILE
 
