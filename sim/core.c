@@ -262,7 +262,7 @@ void core_write(struct core *p_core, uint32_t addr, uint32_t data, bool *write_d
 		}
 
 		// dec "hit" since when data arrives "hit" is inc
-		core_stats_dec(p_core, STATS_WRITE_HIT);
+		core_stats_dec(p_core, STATS_WRITE_HIT); // TODO: BUG!!!
 		core_stats_inc(p_core, STATS_WRITE_MISS);
 		cache_bus_read_x(p_cache, addr);
 	}
@@ -287,7 +287,7 @@ uint32_t core_read(struct core *p_core, uint32_t addr, bool *read_done)
 		}
 
 		// dec "hit" since when data arrives "hit" is inc
-		core_stats_dec(p_core, STATS_READ_HIT);
+		core_stats_dec(p_core, STATS_READ_HIT); // TODO: BUG!!!
 		core_stats_inc(p_core, STATS_READ_MISS);
 		cache_bus_read(p_cache, addr);
 	}

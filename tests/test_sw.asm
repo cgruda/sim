@@ -1,0 +1,9 @@
+	add  $r2, $zero, $imm, 0xa
+	sw   $r2,   $imm, $imm,  1
+	add  $r3, $zero, $imm, 0xaa
+	sw   $r3,   $imm, $zero,  3
+	halt $zero, $zero, $zero, 0
+	halt $zero, $zero, $zero, 0
+	halt $zero, $zero, $zero, 0
+	halt $zero, $zero, $zero, 0
+	halt $zero, $zero, $zero, 0
