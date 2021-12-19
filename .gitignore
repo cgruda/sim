@@ -344,3 +344,4 @@ healthchecksdb
 tests
 example
 asm
+*.exe
