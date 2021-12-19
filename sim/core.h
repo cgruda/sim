@@ -95,6 +95,7 @@ struct core {
 	uint8_t delay_slot_pc;
 
 	int stats[STATS_MAX];
+	bool skip_mem_stats;
 	char *trace_path;
 	char *stats_dump_path;
 	char *reg_dump_path;

@@ -91,7 +91,7 @@ int sim_init(struct sim_env *p_env, int argc, char **argv)
 
 	p_env->mem.dump_path = p_env->paths[PATH_MEMOUT];
 	p_env->mem.p_bus = &p_env->bus;
-	res = mem_load(p_env->paths[PATH_MEMIN], p_env->mem.data, MEM_LEN, MAIN_MEM_MODE);
+	res = mem_load(p_env->paths[PATH_MEMIN], p_env->mem.data, MEM_LEN, MAIN_MEM_MODE, &p_env->mem.last_dump_addr);
 	if (res < 0) {
 		sim_cleanup(p_env);
 		return -1;

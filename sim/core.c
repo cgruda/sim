@@ -167,8 +167,16 @@ void core_branch_resolution(struct core *p_core, uint8_t op, uint32_t rtv, uint3
 		    rtv);
 }
 
+bool core_is_pc_wb(struct core *p_core, uint32_t pc)
+{
+	uint8_t op = INST_OP_GET(p_core->imem[pc & PC_MASK]);
+
+	return (op >= OP_ADD && op <= OP_SRL) || (op == OP_JAL) || (op == OP_LW);
+}
+
 bool core_hazard_raw(struct core *p_core, uint32_t id_inst, uint16_t *raw_info)
 {
+	uint32_t npc;
 	bool hazard = false;
 	bool hazard_rd = false;
 	bool hazard_rs = false;
@@ -186,8 +194,13 @@ bool core_hazard_raw(struct core *p_core, uint32_t id_inst, uint16_t *raw_info)
 
 	for (int i = ID_EX; i < PIPE_MAX; i++) {
 		p_pipe = &p_core->pipe[i];
+		npc = p_pipe->npc.q;
 
-		if (!p_pipe->dst.q) {
+		if (!core_is_pc_wb(p_core, npc)) {
+			return false;
+		}
+
+		if (p_pipe->dst.q < 2) {
 			continue;
 		}
 
@@ -245,25 +258,37 @@ void core_write(struct core *p_core, uint32_t addr, uint32_t data, bool *write_d
 	if (cache_hit(p_cache, addr)) {
 		if (cache_state_get(p_cache, idx) == MESI_SHARED) {
 			*write_done = false;
+
+			if (!p_core->skip_mem_stats) {
+				core_stats_dec(p_core, STATS_WRITE_HIT);
+				core_stats_inc(p_core, STATS_WRITE_MISS);
+				dbg_verbose("[core%d][stats] WH=%d WM=%d\n", p_core->idx, p_core->stats[STATS_WRITE_HIT], p_core->stats[STATS_WRITE_MISS]);
+				p_core->skip_mem_stats = true;
+			}
+
 			cache_bus_read_x(p_cache, addr);
 			return;
 		}
 
 		*write_done = true;
+		core_stats_inc(p_core, STATS_WRITE_HIT);
 		cache_write(p_cache, addr, data);
 		cache_state_set(p_cache, idx, MESI_MODIFIED);
-		core_stats_inc(p_core, STATS_WRITE_HIT);
 	} else {
 		*write_done = false;
-		
+
 		if (cache_state_get(p_cache, idx) == MESI_MODIFIED) {
 			cache_evict_block(p_cache, idx);
 			return;
 		}
 
-		// dec "hit" since when data arrives "hit" is inc
-		core_stats_dec(p_core, STATS_WRITE_HIT); // TODO: BUG!!!
-		core_stats_inc(p_core, STATS_WRITE_MISS);
+		if (!p_core->skip_mem_stats) {
+			core_stats_dec(p_core, STATS_WRITE_HIT);
+			core_stats_inc(p_core, STATS_WRITE_MISS);
+			dbg_verbose("[core%d][stats] WH=%d WM=%d\n", p_core->idx, p_core->stats[STATS_WRITE_HIT], p_core->stats[STATS_WRITE_MISS]);
+			p_core->skip_mem_stats = true;
+		}
+
 		cache_bus_read_x(p_cache, addr);
 	}
 }
@@ -276,8 +301,8 @@ uint32_t core_read(struct core *p_core, uint32_t addr, bool *read_done)
 
 	if (cache_hit(p_cache, addr)) {
 		*read_done = true;
-		data = cache_read(p_cache, addr);
 		core_stats_inc(p_core, STATS_READ_HIT);
+		data = cache_read(p_cache, addr);
 	} else {
 		*read_done = false;
 
@@ -286,9 +311,13 @@ uint32_t core_read(struct core *p_core, uint32_t addr, bool *read_done)
 			return 0;
 		}
 
-		// dec "hit" since when data arrives "hit" is inc
-		core_stats_dec(p_core, STATS_READ_HIT); // TODO: BUG!!!
-		core_stats_inc(p_core, STATS_READ_MISS);
+		if (!p_core->skip_mem_stats) {
+			core_stats_dec(p_core, STATS_READ_HIT);
+			core_stats_inc(p_core, STATS_READ_MISS);
+			dbg_verbose("[core%d][stats] RH=%d RM=%d\n", p_core->idx, p_core->stats[STATS_READ_HIT], p_core->stats[STATS_READ_MISS]);
+			p_core->skip_mem_stats = true;
+		}
+
 		cache_bus_read(p_cache, addr);
 	}
 
@@ -508,6 +537,7 @@ bool core_memory_stall_handle(struct core *p_core)
 	if (!bus_user_in_queue(p_bus, id, NULL)) {
 		if (cache_hit(p_cache, addr)) {
 			p_core->stall_mem = false;
+			p_core->skip_mem_stats = false;
 		} else {
 			dbg_verbose("[core%d][memory] miss2, mesi=%d, tag=%03x\n",
 				    id, cache_state_get(p_cache, ADDR_IDX_GET(addr)),
@@ -518,7 +548,8 @@ bool core_memory_stall_handle(struct core *p_core)
 			dbg_verbose("[core%d][memory] pc=0x%X, stall\n", id, npc);
 			mem_ret = true;
 		} else {
-			dbg_verbose("[core%d][memory] pc=0x%X, now i get the bus!, bus_user=%d, bus_busy=%d\n", id, npc, bus_user_get(p_bus), bus_busy(p_bus));
+			dbg_verbose("[core%d][memory] pc=0x%X, now i get the bus!, bus_user=%d, bus_busy=%d\n",
+				    id, npc, bus_user_get(p_bus), bus_busy(p_bus));
 		}
 	}
 
@@ -667,7 +698,7 @@ int core_load(struct core *p_core, char **file_paths, struct bus *p_bus)
 	p_core->p_cache->p_bus = p_bus;
 	p_core->p_cache->p_core = p_core;
 
-	res = mem_load(file_paths[PATH_IMEME0 + p_core->idx], p_core->imem, IMEM_LEN, MEM_LOAD_FILE);
+	res = mem_load(file_paths[PATH_IMEME0 + p_core->idx], p_core->imem, IMEM_LEN, MEM_LOAD_FILE, NULL);
 	if (res < 0) {
 		return -1;
 	}

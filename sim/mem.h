@@ -19,11 +19,12 @@ struct mem {
 	struct bus *p_bus;
 	uint8_t flush_delay;
 	char *dump_path;
+	uint32_t last_dump_addr;
 };
 
 uint32_t *mem_alloc(int len);
 void mem_free(uint32_t *p_mem);
-int mem_load(char *path, uint32_t *mem, int len, uint8_t load_mode);
+int mem_load(char *path, uint32_t *mem, int len, uint8_t load_mode, uint32_t *cnt);
 int mem_dump(struct mem *p_mem);
 void mem_snoop(struct mem *p_mem);
 

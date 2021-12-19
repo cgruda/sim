@@ -18,8 +18,8 @@ enum dbg_level {
 #define DBG_STDOUT	0
 #define DBG_DUMP_TXT	1
 
-#define DBG_OUTPUT	DBG_STDOUT
-#define DBG_LEVEL	DBG_INFO
+#define DBG_OUTPUT	DBG_DUMP_TXT
+#define DBG_LEVEL	DBG_MAX
 
 #if (DBG_OUTPUT == DBG_DUMP_TXT)
 	extern FILE *dbgfp;

@@ -25,7 +25,7 @@ void mem_free(uint32_t *p_mem)
 	free(p_mem);
 }
 
-int mem_load(char *path, uint32_t *mem, int len, uint8_t load_mode)
+int mem_load(char *path, uint32_t *mem, int len, uint8_t load_mode, uint32_t *cnt)
 {
 	uint32_t *mem_start = mem;
 	FILE *fp = NULL;
@@ -33,6 +33,10 @@ int mem_load(char *path, uint32_t *mem, int len, uint8_t load_mode)
 	if (load_mode == MEM_LOAD_DUMMY) {
 		for (int i = 0; i < len; i++) {
 			mem[i] = i;
+		}
+
+		if (cnt) {
+			*cnt = len;
 		}
 
 		return 0;
@@ -56,6 +60,10 @@ int mem_load(char *path, uint32_t *mem, int len, uint8_t load_mode)
 		}
 	}
 
+	if (cnt) {
+		*cnt = mem - mem_start - 1;
+	}
+
 	fclose(fp);
 	return 0;
 }
@@ -69,7 +77,7 @@ int mem_dump(struct mem *p_mem)
 		return -1;
 	}
 
-	for (int i = 0; i < MEM_LEN; i++) {
+	for (uint32_t i = 0; i <= p_mem->last_dump_addr; i++) {
 		fprintf(fp, "%08X\n", p_mem->data[i]);
 	}
 
@@ -81,6 +89,10 @@ int mem_dump(struct mem *p_mem)
 
 void mem_write(struct mem *p_mem, uint32_t addr, uint32_t data)
 {
+	if ((addr & MEM_ADDR_MASK) > p_mem->last_dump_addr) {
+		p_mem->last_dump_addr = addr & MEM_ADDR_MASK;
+	}
+
 	p_mem->data[addr & MEM_ADDR_MASK] = data;
 }
 
