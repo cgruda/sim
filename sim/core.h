@@ -1,6 +1,7 @@
 #ifndef _CORE_H_
 #define _CORE_H_
 
+#include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -96,7 +97,7 @@ struct core {
 
 	int stats[STATS_MAX];
 	bool skip_mem_stats;
-	char *trace_path;
+	FILE *trace_fp;
 	char *stats_dump_path;
 	char *reg_dump_path;
 };

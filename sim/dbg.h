@@ -1,8 +1,6 @@
 #ifndef _DBG_H_
 #define _DBG_H_
 
-#define _CRT_SECURE_NO_WARNINGS
-
 #include <stdio.h>
 #include <string.h>
 
@@ -15,17 +13,21 @@ enum dbg_level {
 	DBG_MAX
 };
 
-#define DBG_STDOUT	0
-#define DBG_DUMP_TXT	1
+#define STDOUT	0
+#define DBGDUMP	1
 
-#define DBG_OUTPUT	DBG_DUMP_TXT
-#define DBG_LEVEL	DBG_MAX
+/**********************************
+          debug control
+**********************************/
+#define DBG_OUTPUT	STDOUT
+#define DBG_LEVEL	DBG_ERROR
+/**********************************/
 
-#if (DBG_OUTPUT == DBG_DUMP_TXT)
+#if (DBG_OUTPUT == DBGDUMP)
 	extern FILE *dbgfp;
 	#define dbgpath "dbgdump.txt"
 	#define dbg_fp_declare() FILE *dbgfp = NULL;
-	#define dbg_fp_open() do { dbgfp = fopen(dbgpath, "w"); } while(0)
+	#define dbg_fp_open() do { fopen_s(&dbgfp, dbgpath, "w"); } while(0)
 	#define dbg_fp_close() do { fclose(dbgfp); } while(0)
 #else
 	#define dbgfp stdout
@@ -41,14 +43,14 @@ enum dbg_level {
 				 ((level) == (DBG_TRACE))   ? "TRACE" : \
 				                              "N/A")
 
-#define dbg_stamp() fprintf(dbgfp, "[%s][%d]", __func__, __LINE__)
+#define dbg_stamp() fprintf_s(dbgfp, "[%s][%d]", __func__, __LINE__)
 
 #define dbg(level, ...)								\
 	do {									\
 		if (level <= DBG_LEVEL) {					\
 			dbg_stamp();						\
-			fprintf(dbgfp, "[%s] ", DBG_LEVEL_STAMP(level));	\
-			fprintf(dbgfp, __VA_ARGS__);				\
+			fprintf_s(dbgfp, "[%s] ", DBG_LEVEL_STAMP(level));	\
+			fprintf_s(dbgfp, __VA_ARGS__);				\
 		}								\
 	} while (0)
 
@@ -61,7 +63,7 @@ enum dbg_level {
 #define print_error(...) 					\
 	do {							\
 		dbg_error(__VA_ARGS__);				\
-		fprintf(dbgfp, ". %s\n", strerror(errno));	\
+		fprintf_s(dbgfp, " (errno=0x%X)\n", errno);	\
 	} while (0)
 
 #endif

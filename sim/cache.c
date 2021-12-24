@@ -1,11 +1,11 @@
-#include "dbg.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include "cache.h"
 #include "bus.h"
 #include "core.h"
+#include "dbg.h"
 
-struct cache *cache_alloc()
+struct cache *cache_alloc(void)
 {
 	struct cache *p_cache = calloc(1, sizeof(*p_cache));
 	if (!p_cache) {
@@ -86,24 +86,29 @@ uint32_t cache_read(struct cache *p_cache, uint32_t addr)
 int cache_dump(struct cache *p_cache)
 {
 	FILE *fp = NULL;
+	errno_t err;
 
-	if (!(fp = fopen(p_cache->dsram_dump_path, "w"))) {
+	err = fopen_s(&fp, p_cache->dsram_dump_path, "w");
+	if (err || !fp) {
 		print_error("Failed to open \"%s\"", p_cache->dsram_dump_path);
 		return -1;
 	}
 
-	for (int i = 0; i < DSRAM_LEN; i++)
-		fprintf(fp, "%08X\n", p_cache->dsram.mem[i]);
+	for (int i = 0; i < DSRAM_LEN; i++) {
+		fprintf_s(fp, "%08X\n", p_cache->dsram.mem[i]);
+	}
 
 	fclose(fp);
 
-	if (!(fp = fopen(p_cache->tsram_dump_path, "w"))) {
+	err = fopen_s(&fp, p_cache->tsram_dump_path, "w");
+	if (err || !fp) {
 		print_error("Failed to open \"%s\"", p_cache->tsram_dump_path);
 		return -1;
 	}
 
-	for (int i = 0; i < BLOCK_CNT; i++)
-		fprintf(fp, "%08X\n", p_cache->tsram.mem[i]);
+	for (int i = 0; i < BLOCK_CNT; i++) {
+		fprintf_s(fp, "%08X\n", p_cache->tsram.mem[i]);
+	}
 
 	fclose(fp);
 	return 0;
@@ -118,6 +123,9 @@ void cache_flush_block(struct cache *p_cache, uint8_t idx, bool shared)
 	uint32_t flush_addr = base_addr + p_bus->flush_cnt;
 	uint32_t flush_data = cache_read(p_cache, flush_addr);
 
+	/* this fucntion is will be called 4 times during flush operation,
+	 * each call in its clock cycle. addr to be flushed determined by
+	 * flush counter */
 	p_bus->flusher = p_cache->p_core->idx;
 	bus_cmd_set(p_bus, p_cache->p_core->idx, BUS_CMD_FLUSH, flush_addr, flush_data);
 	p_bus->shared = shared;
@@ -130,10 +138,12 @@ void cache_evict_block(struct cache *p_cache, uint8_t idx)
 	struct bus *p_bus = p_cache->p_bus;
 	struct core *p_core = p_cache->p_core;
 
+	/* does not matter if we win arbitration or not */
 	if (!bus_user_in_queue(p_bus, p_core->idx, NULL)) {
 		bus_user_queue_push(p_bus, p_core->idx);
 	}
 
+	/* we won arbitration */
 	if (!bus_busy(p_bus)) {
 		cache_flush_block(p_cache, idx, false);
 		cache_state_set(p_cache, idx, MESI_INVALID);
@@ -146,10 +156,12 @@ void cache_bus_read(struct cache *p_cache, uint32_t addr)
 	struct core *p_core = p_cache->p_core;
 	struct bus *p_bus = p_cache->p_bus;
 
+	/* does not matter if we win arbitration or not */
 	if (!bus_user_in_queue(p_bus, p_core->idx, NULL)) {
 		bus_user_queue_push(p_bus, p_core->idx);
 	}
 
+	/* we won arbitration */
 	if (!bus_busy(p_bus)) {
 		bus_read_cmd_set(p_bus, p_core->idx, addr);
 		dbg_verbose("[bus][BusRd] orig=%x addr=%05x\n", p_bus->origid, p_bus->addr);
@@ -161,10 +173,12 @@ void cache_bus_read_x(struct cache *p_cache, uint32_t addr)
 	struct core *p_core = p_cache->p_core;
 	struct bus *p_bus = p_cache->p_bus;
 
+	/* does not matter if we win arbitration or not */
 	if (!bus_user_in_queue(p_bus, p_core->idx, NULL)) {
 		bus_user_queue_push(p_bus, p_core->idx);
 	}
 
+	/* we won arbitration */
 	if (!bus_busy(p_bus)) {
 		bus_read_x_cmd_set(p_bus, p_core->idx, addr);
 		dbg_verbose("[bus][BusRdX] orig=%x addr=%05x\n", p_bus->origid, p_bus->addr);

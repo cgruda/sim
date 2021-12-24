@@ -1,8 +1,8 @@
-#include "dbg.h"
 #include <stdlib.h>
 #include "mem.h"
 #include "bus.h"
 #include "cache.h"
+#include "dbg.h"
 
 uint32_t *mem_alloc(int len)
 {
@@ -29,7 +29,9 @@ int mem_load(char *path, uint32_t *mem, int len, uint8_t load_mode, uint32_t *cn
 {
 	uint32_t *mem_start = mem;
 	FILE *fp = NULL;
+	errno_t err;
 
+	/* for debug only */
 	if (load_mode == MEM_LOAD_DUMMY) {
 		for (int i = 0; i < len; i++) {
 			mem[i] = i;
@@ -42,13 +44,14 @@ int mem_load(char *path, uint32_t *mem, int len, uint8_t load_mode, uint32_t *cn
 		return 0;
 	}
 
-	if (!(fp = fopen(path, "r"))) {
+	err = fopen_s(&fp, path, "r");
+	if (err || !fp) {
 		print_error("Failed to open \"%s\"", path);
 		return -1;
 	}
 
 	while (!feof(fp)) {
-		if (!fscanf(fp, "%x\n", mem++)) {
+		if (!fscanf_s(fp, "%x\n", mem++)) {
 			dbg_error("\"%s\" scan error\n", path);
 			fclose(fp);
 			return -1;
@@ -71,14 +74,16 @@ int mem_load(char *path, uint32_t *mem, int len, uint8_t load_mode, uint32_t *cn
 int mem_dump(struct mem *p_mem)
 {
 	FILE *fp = NULL;
+	errno_t err;
 
-	if (!(fp = fopen(p_mem->dump_path, "w"))) {
+	err = fopen_s(&fp, p_mem->dump_path, "w");
+	if (err || !fp) {
 		print_error("Failed to open \"%s\"", p_mem->dump_path);
 		return -1;
 	}
 
 	for (uint32_t i = 0; i <= p_mem->last_dump_addr; i++) {
-		fprintf(fp, "%08X\n", p_mem->data[i]);
+		fprintf_s(fp, "%08X\n", p_mem->data[i]);
 	}
 
 	dbg_info("[mem] dump done\n");
@@ -89,6 +94,7 @@ int mem_dump(struct mem *p_mem)
 
 void mem_write(struct mem *p_mem, uint32_t addr, uint32_t data)
 {
+	/* so as to not print all memout */
 	if ((addr & MEM_ADDR_MASK) > p_mem->last_dump_addr) {
 		p_mem->last_dump_addr = addr & MEM_ADDR_MASK;
 	}
@@ -131,6 +137,7 @@ void mem_snoop(struct mem *p_mem)
 	}
 
 	switch(bus_cmd_get(p_bus)) {
+	/* core asked for data - if got here then no core has data (M) */
 	case BUS_CMD_BUS_RD:
 	case BUS_CMD_BUS_RD_X:
 		dbg_verbose("[mem][snoop] orig=%x, cmd=%x, addr=%05x\n", p_bus->origid, p_bus->cmd, p_bus->addr);
@@ -139,11 +146,12 @@ void mem_snoop(struct mem *p_mem)
 		p_bus->cmd = BUS_CMD_NONE;
 		break;
 
+	/* im flusing, or core flushing */
 	case BUS_CMD_FLUSH:
 		mem_write(p_mem, p_bus->addr, p_bus->data);
 
 		if (bus_user_get(p_bus) == p_bus->origid) {
-			// core evicting a modified block
+			/* core evicting a modified block */
 			dbg_verbose("[mem][snoop][evict] orig=%x, addr=%05x, data=%08x, clear_bus=%d\n", p_bus->origid,
 				p_bus->addr, p_bus->data, p_bus->flush_cnt == BLOCK_LEN);
 

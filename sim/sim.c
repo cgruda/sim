@@ -1,4 +1,3 @@
-#include "dbg.h"
 #include <stdio.h>
 #include <stdint.h>
 #include "sim.h"
@@ -6,11 +5,11 @@
 #include "mem.h"
 #include "bus.h"
 #include "cache.h"
+#include "dbg.h"
 
 #define ARGC_CNT	27
-#define MAX_ITERATIONS  0 // FIXME: for debug
-// #define MAIN_MEM_MODE	MEM_LOAD_DUMMY
-#define MAIN_MEM_MODE	MEM_LOAD_FILE
+#define MAX_ITERATIONS  0 		/* debug: 0=disable */
+#define MAIN_MEM_MODE	MEM_LOAD_FILE	/* load memin file */
 
 int sim_clk = 0;
 
@@ -46,6 +45,10 @@ const char *sim_default_paths[PATH_MAX] = {
 
 int sim_cleanup(struct sim_env *p_env)
 {
+	if (p_env->bus.trace_fp) {
+		fclose(p_env->bus.trace_fp);
+	}
+
 	if (p_env->mem.data) {
 		mem_free(p_env->mem.data);
 	}
@@ -66,7 +69,6 @@ void sim_remove_old_output_files(char **file_paths)
 	}
 }
 
-// TODO: rewrite
 int sim_init(struct sim_env *p_env, int argc, char **argv)
 {
 	int res = 0;
@@ -85,7 +87,6 @@ int sim_init(struct sim_env *p_env, int argc, char **argv)
 
 	p_env->mem.data = mem_alloc(MEM_LEN);
 	if (!p_env->mem.data) {
-		sim_cleanup(p_env);
 		return -1;
 	}
 
@@ -93,22 +94,22 @@ int sim_init(struct sim_env *p_env, int argc, char **argv)
 	p_env->mem.p_bus = &p_env->bus;
 	res = mem_load(p_env->paths[PATH_MEMIN], p_env->mem.data, MEM_LEN, MAIN_MEM_MODE, &p_env->mem.last_dump_addr);
 	if (res < 0) {
-		sim_cleanup(p_env);
 		return -1;
 	}
 
-	bus_init(&p_env->bus, p_env->paths[PATH_BUSTRACE]);
+	res = bus_init(&p_env->bus, p_env->paths[PATH_BUSTRACE]);
+	if (res < 0) {
+		return -1;
+	}
 
 	for (int i = 0; i < CORE_MAX; i++) {
 		res = core_alloc(&p_env->core[i], i);
 		if (res < 0) {
-			sim_cleanup(p_env);
 			return -1;
 		}
 
 		res = core_load(&p_env->core[i], p_env->paths, &p_env->bus);
 		if (res < 0) {
-			sim_cleanup(p_env);
 			return -1;
 		}
 	}

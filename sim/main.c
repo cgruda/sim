@@ -1,5 +1,5 @@
-#include "dbg.h"
 #include "sim.h"
+#include "dbg.h"
 
 dbg_fp_declare()
 
@@ -11,6 +11,7 @@ int main(int argc, char **argv)
 
 	res = sim_init(&env, --argc, ++argv);
 	if (res < 0) {
+		sim_cleanup(&env);
 		return -1;
 	}
 

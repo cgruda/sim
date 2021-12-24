@@ -1,10 +1,10 @@
-#include "dbg.h"
-#include "bus.h"
 #include <stdbool.h>
 #include "cache.h"
 #include "core.h"
 #include "mem.h"
 #include "sim.h"
+#include "bus.h"
+#include "dbg.h"
 
 bool bus_user_in_queue(struct bus *p_bus, uint8_t user, uint8_t *p_pos)
 {
@@ -46,10 +46,6 @@ void bus_user_queue_push(struct bus *p_bus, uint8_t user)
 			break;
 		}
 	}
-
-	// FIXME: temp
-	dbg_verbose("[bus] user_queue=[(t)%d,%d,%d,%d(h)]\n", p_bus->user_queue[3],
-		    p_bus->user_queue[2], p_bus->user_queue[1], p_bus->user_queue[0]);
 }
 
 void bus_user_queue_pop(struct bus *p_bus)
@@ -59,10 +55,6 @@ void bus_user_queue_pop(struct bus *p_bus)
 	}
 
 	p_bus->user_queue[BUS_QUEUE_LEN - 1] = ORIGID_INVALID;
-
-	// FIXME: temp
-	dbg_verbose("[bus] user_queue=[(t)%d,%d,%d,%d(h)]\n", p_bus->user_queue[3],
-		    p_bus->user_queue[2], p_bus->user_queue[1], p_bus->user_queue[0]);
 }
 
 void bus_user_queue_reset(struct bus *p_bus)
@@ -70,17 +62,6 @@ void bus_user_queue_reset(struct bus *p_bus)
 	for (int i = 0; i < BUS_QUEUE_LEN; i++) {
 		p_bus->user_queue[i] = ORIGID_INVALID;
 	}
-}
-
-bool bus_user_queue_empty(struct bus *p_bus)
-{
-	for (int i = 0; i < BUS_QUEUE_LEN; i++) {
-		if (p_bus->user_queue[i] != ORIGID_INVALID) {
-			return false;
-		}
-	}
-
-	return true;
 }
 
 uint8_t bus_cmd_get(struct bus *p_bus)
@@ -93,11 +74,6 @@ bool bus_busy(struct bus *p_bus)
 	return p_bus->busy;
 }
 
-bool bus_available(struct bus *p_bus)
-{
-	return (bus_cmd_get(p_bus) == BUS_CMD_NONE);
-}
-
 void bus_cmd_set(struct bus *p_bus, uint8_t orig_id, uint8_t cmd,
 	uint32_t addr, uint32_t data)
 {
@@ -107,15 +83,24 @@ void bus_cmd_set(struct bus *p_bus, uint8_t orig_id, uint8_t cmd,
 	p_bus->data = data;
 }
 
-void bus_init(struct bus *p_bus, char *path)
+int bus_init(struct bus *p_bus, char *path)
 {
+	errno_t err;
+
+	err = fopen_s(&p_bus->trace_fp, path, "w");
+	if (err || !p_bus->trace_fp) {
+		print_error("Failed to open \"%s\"", path);
+		return -1;
+	}
+
 	bus_cmd_set(p_bus, 0, 0, 0, 0);
 	p_bus->shared = false;
 	p_bus->busy = false;
 	p_bus->flush_cnt = 0;
-	p_bus->trace_path = path;
 	p_bus->flusher = ORIGID_MAX;
 	bus_user_queue_reset(p_bus);
+
+	return 0;
 }
 
 void bus_read_cmd_set(struct bus *p_bus, uint8_t orig_id, uint32_t addr)
@@ -125,7 +110,7 @@ void bus_read_cmd_set(struct bus *p_bus, uint8_t orig_id, uint32_t addr)
 	}
 
 	bus_cmd_set(p_bus, orig_id, BUS_CMD_BUS_RD, addr, 0);
-	p_bus->shared = false; // FIXME: relevant?
+	p_bus->shared = false;
 	p_bus->busy = true;
 }
 
@@ -140,24 +125,16 @@ void bus_read_x_cmd_set(struct bus *p_bus, uint8_t orig_id, uint32_t addr)
 	p_bus->busy = true;
 }
 
-int bus_trace(struct bus *p_bus)
+void bus_trace(struct bus *p_bus)
 {
-	FILE *fp = NULL;
+	FILE *fp = p_bus->trace_fp;
 
 	if (!p_bus->cmd) {
-		return 0;
+		return;
 	}
 
-	if (!(fp = fopen(p_bus->trace_path, "a"))) {
-		print_error("Failed to open \"%s\"", p_bus->trace_path);
-		return -1;
-	}
-
-	fprintf(fp, "%d %X %X %05X %08X %X\n", sim_clk, p_bus->origid,
+	fprintf_s(fp, "%d %X %X %05X %08X %X\n", sim_clk, p_bus->origid,
 		    p_bus->cmd, p_bus->addr, p_bus->data, p_bus->shared);
-	
-	fclose(fp);
-	return 0;
 }
 
 void bus_clear(struct bus *p_bus)
